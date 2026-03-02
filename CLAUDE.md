@@ -14,3 +14,5 @@
 - This is a Shadcn UI application
 - Uses Tailwind CSS for styling
 - Built with Next.js/React
+
+
