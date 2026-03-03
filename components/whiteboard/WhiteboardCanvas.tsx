@@ -34,7 +34,7 @@ const WhiteboardCanvas = forwardRef<WhiteboardRef>((_, ref) => {
       <Tldraw
         onMount={handleMount}
         inferDarkMode
-        hideUi={false}
+        hideUi
       />
     </div>
   )

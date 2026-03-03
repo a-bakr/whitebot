@@ -16,12 +16,17 @@ export default function Home() {
   const whiteboardRef = useRef<WhiteboardRef>(null)
   const getEngine = () => whiteboardRef.current?.getEngine() ?? null
 
-  const { isThinking, sendMessage } = useTutor(getEngine)
+  const { isThinking, isActive, sendMessage, stop } = useTutor(getEngine)
 
   return (
     <main className="relative h-screen w-screen overflow-hidden">
       <WhiteboardCanvas ref={whiteboardRef} />
-      <TutorInterface isThinking={isThinking} onSend={sendMessage} />
+      <TutorInterface
+        isThinking={isThinking}
+        isActive={isActive}
+        onSend={sendMessage}
+        onStop={stop}
+      />
     </main>
   )
 }

@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from 'react'
 import type { DrawingEngine } from '@/lib/drawing-engine'
-import type { TutorCommand } from '@/lib/drawing-types'
+import type { DrawCommand, TutorCommand } from '@/lib/drawing-types'
 import { useSpeech } from './useSpeech'
 
 export interface Message {
@@ -10,11 +10,22 @@ export interface Message {
   content: string
 }
 
+interface Segment {
+  speechText: string
+  draws: DrawCommand[]
+  ttsPromise: Promise<string>
+}
+
 export function useTutor(getEngine: () => DrawingEngine | null) {
   const [messages, setMessages] = useState<Message[]>([])
   const [isThinking, setIsThinking] = useState(false)
+  const [isActive, setIsActive] = useState(false)
   const speech = useSpeech()
   const abortRef = useRef<AbortController | null>(null)
+  const segmentQueueRef = useRef<Segment[]>([])
+  const executorRunningRef = useRef(false)
+  const executorStoppedRef = useRef(false)
+  const streamDoneRef = useRef(false)
 
   const sendMessage = useCallback(
     async (userText: string) => {
@@ -26,14 +37,65 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
       ]
       setMessages(nextMessages)
       setIsThinking(true)
+      setIsActive(true)
 
-      // Stop any ongoing speech
+      // Stop any ongoing speech and executor
       speech.stop()
+      executorStoppedRef.current = true
+      segmentQueueRef.current = []
 
       // Cancel any in-flight request
       abortRef.current?.abort()
       const controller = new AbortController()
       abortRef.current = controller
+
+      // Reset executor state for new message
+      executorStoppedRef.current = false
+      streamDoneRef.current = false
+
+      async function runSegments() {
+        executorRunningRef.current = true
+        setIsActive(true)
+        while (!executorStoppedRef.current) {
+          if (segmentQueueRef.current.length === 0) {
+            if (streamDoneRef.current) break
+            await new Promise((r) => setTimeout(r, 10))
+            continue
+          }
+          const seg = segmentQueueRef.current.shift()!
+          let blobUrl: string | null = null
+          try {
+            blobUrl = await seg.ttsPromise
+          } catch (err) {
+            console.error('[useTutor] TTS prefetch failed:', err)
+          }
+          if (executorStoppedRef.current) {
+            if (blobUrl) URL.revokeObjectURL(blobUrl)
+            break
+          }
+          const engine = getEngine()
+          if (blobUrl) {
+            // Start audio and draws in the same JS tick — audio is listed first
+            // so audio.play() is called before any draw calls begin
+            await Promise.all([
+              speech.playBlob(blobUrl),
+              engine
+                ? Promise.all(
+                    seg.draws.map((cmd) => engine.executeCommand(cmd).catch(console.error)),
+                  )
+                : Promise.resolve(),
+            ])
+          } else {
+            if (engine) {
+              await Promise.all(
+                seg.draws.map((cmd) => engine.executeCommand(cmd).catch(console.error)),
+              )
+            }
+          }
+        }
+        executorRunningRef.current = false
+        setIsActive(false)
+      }
 
       try {
         const res = await fetch('/api/tutor', {
@@ -49,6 +111,7 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
         const decoder = new TextDecoder()
         let buffer = ''
         let assistantContent = ''
+        let currentSegment: Segment | null = null
 
         while (true) {
           const { done, value } = await reader.read()
@@ -73,14 +136,42 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
             assistantContent += trimmed + '\n'
 
             if (cmd.t === 'speech') {
-              speech.speak(cmd.text)
+              // Finalize previous segment into queue
+              if (currentSegment) {
+                segmentQueueRef.current.push(currentSegment)
+              }
+              // Start new segment and immediately kick off TTS fetch
+              currentSegment = {
+                speechText: cmd.text,
+                draws: [],
+                ttsPromise: speech.prefetch(cmd.text),
+              }
+              // Start executor if not already running
+              if (!executorRunningRef.current) {
+                runSegments()
+              }
             } else if (cmd.t === 'draw') {
-              const engine = getEngine()
-              if (engine) {
-                engine.executeCommand(cmd).catch(console.error)
+              if (currentSegment) {
+                // Accumulate draws for the current segment
+                currentSegment.draws.push(cmd)
+              } else {
+                // Pre-speech draw (e.g. clear) — execute immediately
+                const engine = getEngine()
+                if (engine) {
+                  engine.executeCommand(cmd).catch(console.error)
+                }
               }
             }
           }
+        }
+
+        // Finalize last segment
+        if (currentSegment) {
+          segmentQueueRef.current.push(currentSegment)
+        }
+        streamDoneRef.current = true
+        if (!executorRunningRef.current) {
+          runSegments()
         }
 
         setMessages((prev) => [
@@ -88,8 +179,13 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
           { role: 'assistant', content: assistantContent.trim() },
         ])
       } catch (err: unknown) {
-        if (err instanceof Error && err.name === 'AbortError') return
+        if (err instanceof Error && err.name === 'AbortError') {
+          setIsActive(false)
+          return
+        }
         console.error('[useTutor] stream error:', err)
+        streamDoneRef.current = true
+        setIsActive(false)
       } finally {
         setIsThinking(false)
       }
@@ -97,5 +193,14 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
     [messages, isThinking, speech, getEngine],
   )
 
-  return { messages, isThinking, sendMessage }
+  const stopAll = useCallback(() => {
+    speech.stop()
+    executorStoppedRef.current = true
+    segmentQueueRef.current = []
+    abortRef.current?.abort()
+    setIsThinking(false)
+    setIsActive(false)
+  }, [speech])
+
+  return { messages, isThinking, isActive, sendMessage, stop: stopAll }
 }

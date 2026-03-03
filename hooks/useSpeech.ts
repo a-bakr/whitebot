@@ -6,12 +6,22 @@ export function useSpeech() {
   const queue = useRef<string[]>([])
   const isPlaying = useRef(false)
   const stopped = useRef(false)
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null)
 
   const processQueue = useCallback(async () => {
     isPlaying.current = true
     while (queue.current.length > 0 && !stopped.current) {
       const text = queue.current.shift()!
-      await playText(text)
+      try {
+        const url = await prefetchTTS(text)
+        if (stopped.current) {
+          URL.revokeObjectURL(url)
+          break
+        }
+        await playBlobUrl(url, currentAudioRef)
+      } catch (err) {
+        console.error('[TTS] processQueue failed:', err)
+      }
     }
     isPlaying.current = false
   }, [])
@@ -29,36 +39,55 @@ export function useSpeech() {
   const stop = useCallback(() => {
     stopped.current = true
     queue.current = []
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause()
+      currentAudioRef.current = null
+    }
   }, [])
 
-  return { speak, stop }
+  const prefetch = useCallback((text: string): Promise<string> => {
+    return prefetchTTS(text)
+  }, [])
+
+  const playBlob = useCallback((url: string): Promise<void> => {
+    return playBlobUrl(url, currentAudioRef)
+  }, [])
+
+  return { speak, stop, prefetch, playBlob }
 }
 
-async function playText(text: string): Promise<void> {
-  try {
-    const res = await fetch('/api/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
-    })
-    if (!res.ok) throw new Error(`TTS HTTP ${res.status}`)
+async function prefetchTTS(text: string): Promise<string> {
+  const res = await fetch('/api/tts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
+  })
+  if (!res.ok) throw new Error(`TTS HTTP ${res.status}`)
+  const blob = await res.blob()
+  return URL.createObjectURL(blob)
+}
 
-    const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
+async function playBlobUrl(
+  url: string,
+  currentAudioRef: { current: HTMLAudioElement | null },
+): Promise<void> {
+  return new Promise<void>((resolve) => {
     const audio = new Audio(url)
-
-    await new Promise<void>((resolve) => {
-      audio.onended = () => {
-        URL.revokeObjectURL(url)
-        resolve()
-      }
-      audio.onerror = () => {
-        URL.revokeObjectURL(url)
-        resolve()
-      }
-      audio.play().catch(() => resolve())
+    currentAudioRef.current = audio
+    audio.onended = () => {
+      URL.revokeObjectURL(url)
+      currentAudioRef.current = null
+      resolve()
+    }
+    audio.onerror = () => {
+      URL.revokeObjectURL(url)
+      currentAudioRef.current = null
+      resolve()
+    }
+    audio.play().catch(() => {
+      URL.revokeObjectURL(url)
+      currentAudioRef.current = null
+      resolve()
     })
-  } catch (err) {
-    console.error('[TTS] playText failed:', err)
-  }
+  })
 }

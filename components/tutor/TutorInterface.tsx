@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, type KeyboardEvent } from 'react'
-import { Send, Loader2 } from 'lucide-react'
+import { Send, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { VoiceButton } from './VoiceButton'
@@ -9,10 +9,12 @@ import { useDeepgram } from '@/hooks/useDeepgram'
 
 interface TutorInterfaceProps {
   isThinking: boolean
+  isActive: boolean
   onSend: (text: string) => void
+  onStop: () => void
 }
 
-export function TutorInterface({ isThinking, onSend }: TutorInterfaceProps) {
+export function TutorInterface({ isThinking, isActive, onSend, onStop }: TutorInterfaceProps) {
   const [input, setInput] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -59,19 +61,27 @@ export function TutorInterface({ isThinking, onSend }: TutorInterfaceProps) {
           autoComplete="off"
         />
 
-        <Button
-          type="button"
-          size="icon"
-          className="h-10 w-10 shrink-0"
-          onClick={submit}
-          disabled={!input.trim() || isThinking}
-        >
-          {isThinking ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
+        {isActive ? (
+          <Button
+            type="button"
+            size="icon"
+            variant="destructive"
+            className="h-10 w-10 shrink-0"
+            onClick={onStop}
+          >
+            <Square className="h-4 w-4 fill-current" />
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            size="icon"
+            className="h-10 w-10 shrink-0"
+            onClick={submit}
+            disabled={!input.trim()}
+          >
             <Send className="h-4 w-4" />
-          )}
-        </Button>
+          </Button>
+        )}
       </div>
     </div>
   )

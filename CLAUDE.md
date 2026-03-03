@@ -31,7 +31,7 @@ An interactive AI tutor that teaches any topic by drawing on a whiteboard in rea
 | Layer | Choice | Reason |
 |---|---|---|
 | **Whiteboard** | tldraw v4 | First-class AI agent kit, `editor.createShapes()` programmatic API |
-| **LLM** | GPT-4.1 via Vercel AI SDK v6 | Streaming support, `@ai-sdk/openai` |
+| **LLM** | GPT-5.2 via Vercel AI SDK v6 | Streaming support, `@ai-sdk/openai` |
 | **TTS** | ElevenLabs WebSocket (fallback: OpenAI TTS) | ~135ms latency, natural voice; OpenAI TTS as fallback if ElevenLabs unavailable |
 | **STT** | Deepgram Nova-3 WebSocket | All browsers, <300ms latency, production-grade |
 | **Drawing Protocol** | NDJSON (newline-delimited JSON) | Parse line-by-line as stream arrives |
@@ -82,7 +82,7 @@ The AI emits one JSON object per line, interleaved speech + draw commands:
 app/
   page.tsx                        # MODIFY: Replace starter page with tutor UI
   api/
-    tutor/route.ts                # NEW: Streaming GPT-4.1 API route
+    tutor/route.ts                # NEW: Streaming GPT-5.2 API route
     deepgram-token/route.ts       # NEW: Issue temporary Deepgram tokens
 components/
   whiteboard/WhiteboardCanvas.tsx # NEW: tldraw wrapper + drawing engine
@@ -95,7 +95,7 @@ hooks/
 lib/
   drawing-engine.ts               # NEW: NDJSON command → tldraw API calls
   drawing-types.ts                # NEW: TypeScript types for draw commands
-  tutor-prompt.ts                 # NEW: System prompt for GPT-4.1
+  tutor-prompt.ts                 # NEW: System prompt for GPT-5.2
 ```
 
 ## Required Environment Variables

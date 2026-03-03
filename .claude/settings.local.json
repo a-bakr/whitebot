@@ -5,7 +5,9 @@
       "Bash(cat:*)",
       "Bash(cd:*)",
       "Bash(wsl:*)",
-      "Bash(pnpm install)"
+      "Bash(pnpm install)",
+      "Bash(pnpm type-check:*)",
+      "Bash(npx tsc:*)"
     ]
   }
 }
