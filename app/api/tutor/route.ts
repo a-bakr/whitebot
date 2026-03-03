@@ -1,15 +1,10 @@
-import { TUTOR_SYSTEM_PROMPT } from '@/lib/tutor-prompt'
+import { buildSystemPrompt } from '@/lib/tutor-prompt'
 import { anthropic } from '@ai-sdk/anthropic'
 import { openai } from '@ai-sdk/openai'
 import { streamText } from 'ai'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
-
-const streamParams = {
-  system: TUTOR_SYSTEM_PROMPT,
-  maxOutputTokens: 2048,
-} as const
 
 function textDeltaStream(result: Awaited<ReturnType<typeof streamText>>): Response {
   const encoder = new TextEncoder()
@@ -27,12 +22,14 @@ function textDeltaStream(result: Awaited<ReturnType<typeof streamText>>): Respon
 }
 
 export async function POST(req: Request) {
-  const { messages } = await req.json()
+  const { messages, yOffset = 55, viewport = { w: 1200, h: 750 } } = await req.json()
+  const system = buildSystemPrompt(yOffset, viewport.w, viewport.h)
 
   try {
     const result = await streamText({
       model: anthropic('claude-sonnet-4-6'),
-      ...streamParams,
+      system,
+      maxOutputTokens: 2048,
       messages,
     })
     return textDeltaStream(result)
@@ -40,7 +37,8 @@ export async function POST(req: Request) {
     console.warn('[tutor] Anthropic failed, falling back to OpenAI:', err)
     const result = await streamText({
       model: openai('gpt-5.2-2025-12-11'),
-      ...streamParams,
+      system,
+      maxOutputTokens: 2048,
       messages,
     })
     return textDeltaStream(result)

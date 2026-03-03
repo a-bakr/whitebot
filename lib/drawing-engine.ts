@@ -91,6 +91,25 @@ export class DrawingEngine {
     if (ids.length > 0) this.editor.deleteShapes(ids)
   }
 
+  getNextSectionY(): number {
+    const bounds = this.editor.getCurrentPageBounds()
+    if (!bounds) return 55
+    return Math.ceil(bounds.maxY) + 100
+  }
+
+  getViewportBounds(): { x: number; y: number; w: number; h: number } {
+    const vp = this.editor.getViewportPageBounds()
+    return { x: Math.round(vp.x), y: Math.round(vp.y), w: Math.round(vp.w), h: Math.round(vp.h) }
+  }
+
+  scrollToSection(y: number): void {
+    const vp = this.editor.getViewportPageBounds()
+    this.editor.centerOnPoint(
+      { x: vp.x + vp.w / 2, y: y + vp.h * 0.35 },
+      { animation: { duration: 400 } },
+    )
+  }
+
   private async animateRichText(id: TLShapeId, fullText: string) {
     let current = ''
     for (const char of fullText) {

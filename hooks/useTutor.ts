@@ -102,14 +102,22 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
       }
 
       try {
+        // Capture canvas context before fetch so AI knows where to draw
+        const engine = getEngine()
+        const yOffset = engine?.getNextSectionY() ?? 55
+        const viewport = engine?.getViewportBounds() ?? { x: 0, y: 0, w: 1200, h: 750 }
+
         const res = await fetch('/api/tutor', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ messages: nextMessages }),
+          body: JSON.stringify({ messages: nextMessages, yOffset, viewport }),
           signal: controller.signal,
         })
 
         if (!res.ok || !res.body) throw new Error(`API error ${res.status}`)
+
+        // Scroll to the new section before drawing starts
+        engine?.scrollToSection(yOffset)
 
         const reader = res.body.getReader()
         const decoder = new TextDecoder()

@@ -12,7 +12,8 @@
       "WebFetch(domain:bertomill.medium.com)",
       "WebFetch(domain:strapi.io)",
       "WebFetch(domain:enhancial.substack.com)",
-      "WebFetch(domain:vercel.com)"
+      "WebFetch(domain:vercel.com)",
+      "Bash(npm run:*)"
     ]
   }
 }
