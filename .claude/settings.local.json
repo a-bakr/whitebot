@@ -7,7 +7,8 @@
       "Bash(wsl:*)",
       "Bash(pnpm install)",
       "Bash(pnpm type-check:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(find:*)"
     ]
   }
 }
