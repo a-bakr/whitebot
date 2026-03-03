@@ -81,6 +81,8 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
             let drawPromise: Promise<unknown> = Promise.resolve()
             await speech.playBlob(blobUrl, () => {
               if (engine) {
+                // Pan camera to show upcoming shapes (skipped if user recently touched camera)
+                engine.panToShowDrawCommands(seg.draws)
                 drawPromise = Promise.all(
                   seg.draws.map((cmd) => engine.executeCommand(cmd).catch(console.error)),
                 )
@@ -91,6 +93,7 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
             await drawPromise
           } else {
             if (engine) {
+              engine.panToShowDrawCommands(seg.draws)
               await Promise.all(
                 seg.draws.map((cmd) => engine.executeCommand(cmd).catch(console.error)),
               )

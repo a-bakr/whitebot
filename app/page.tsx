@@ -16,7 +16,7 @@ const WhiteboardCanvas = dynamic(
 export default function Home() {
   const whiteboardRef = useRef<WhiteboardRef>(null)
   const getEngine = () => whiteboardRef.current?.getEngine() ?? null
-  const [activeTool, setActiveTool] = useState('select')
+  const [activeTool, setActiveTool] = useState('hand')
 
   const { isThinking, isActive, sendMessage, stop } = useTutor(getEngine)
 

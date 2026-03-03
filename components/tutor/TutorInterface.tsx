@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, type KeyboardEvent } from 'react'
-import { Send, Square, MousePointer2, Pencil, Eraser, Type } from 'lucide-react'
+import { Send, Square, MousePointer2, Pencil, Eraser, Type, Hand } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -9,6 +9,7 @@ import { VoiceButton } from './VoiceButton'
 import { useDeepgram } from '@/hooks/useDeepgram'
 
 const TOOLS = [
+  { id: 'hand',   icon: Hand,          label: 'Pan'    },
   { id: 'select', icon: MousePointer2, label: 'Select' },
   { id: 'draw',   icon: Pencil,        label: 'Draw'   },
   { id: 'eraser', icon: Eraser,        label: 'Erase'  },
@@ -53,14 +54,6 @@ export function TutorInterface({ isThinking, isActive, onSend, onStop, activeToo
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 h-16 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex h-full items-center gap-3 px-4">
-        <VoiceButton
-          isListening={isListening}
-          isThinking={isThinking}
-          liveText={liveText}
-          onStart={start}
-          onStop={stop}
-        />
-
         <Popover open={toolsOpen} onOpenChange={setToolsOpen}>
           <PopoverTrigger asChild>
             <Button
@@ -91,6 +84,14 @@ export function TutorInterface({ isThinking, isActive, onSend, onStop, activeToo
             </div>
           </PopoverContent>
         </Popover>
+
+        <VoiceButton
+          isListening={isListening}
+          isThinking={isThinking}
+          liveText={liveText}
+          onStart={start}
+          onStop={stop}
+        />
 
         <Input
           ref={inputRef}

@@ -42,8 +42,59 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms))
 }
 
+function getCommandBounds(
+  cmd: DrawCommand,
+): { x: number; y: number; w: number; h: number } | null {
+  switch (cmd.cmd) {
+    case 'title':
+      return { x: cmd.x, y: cmd.y, w: 400, h: 70 }
+    case 'text':
+      return { x: cmd.x, y: cmd.y, w: 350, h: 40 }
+    case 'rect':
+      return { x: cmd.x, y: cmd.y, w: cmd.w, h: cmd.h }
+    case 'circle':
+      return { x: cmd.x - cmd.r, y: cmd.y - cmd.r, w: cmd.r * 2, h: cmd.r * 2 }
+    case 'arrow':
+    case 'sketch-arrow': {
+      const x = Math.min(cmd.x1, cmd.x2)
+      const y = Math.min(cmd.y1, cmd.y2)
+      return { x, y, w: Math.max(Math.abs(cmd.x2 - cmd.x1), 20), h: Math.max(Math.abs(cmd.y2 - cmd.y1), 20) }
+    }
+    case 'line': {
+      const x = Math.min(cmd.x1, cmd.x2)
+      const y = Math.min(cmd.y1, cmd.y2)
+      return { x, y, w: Math.max(Math.abs(cmd.x2 - cmd.x1), 20), h: Math.max(Math.abs(cmd.y2 - cmd.y1), 20) }
+    }
+    case 'bullet':
+      return { x: cmd.x, y: cmd.y + cmd.index * 40, w: 400, h: 40 }
+    case 'highlight':
+    case 'circle-em':
+      return { x: cmd.x, y: cmd.y, w: cmd.w, h: cmd.h }
+    case 'underline': {
+      const x = Math.min(cmd.x1, cmd.x2)
+      const y = Math.min(cmd.y1, cmd.y2)
+      return { x, y, w: Math.max(Math.abs(cmd.x2 - cmd.x1), 20), h: 10 }
+    }
+    default:
+      return null
+  }
+}
+
 export class DrawingEngine {
-  constructor(private editor: Editor) {}
+  private _lastUserInteraction = 0
+
+  constructor(private editor: Editor) {
+    this._subscribeToUserInteraction()
+  }
+
+  private _subscribeToUserInteraction() {
+    const update = () => {
+      this._lastUserInteraction = Date.now()
+    }
+    const el = this.editor.getContainer()
+    el.addEventListener('pointerdown', update, { passive: true })
+    el.addEventListener('wheel', update, { passive: true })
+  }
 
   async executeCommand(cmd: DrawCommand) {
     switch (cmd.cmd) {
@@ -106,6 +157,45 @@ export class DrawingEngine {
     const vp = this.editor.getViewportPageBounds()
     this.editor.centerOnPoint(
       { x: vp.x + vp.w / 2, y: y + vp.h * 0.35 },
+      { animation: { duration: 400 } },
+    )
+  }
+
+  panToShowDrawCommands(cmds: DrawCommand[]): void {
+    // Layer 2: don't fight the user if they've recently touched the camera
+    if (Date.now() - this._lastUserInteraction < 2000) return
+
+    // Compute union bounding box of all shapes in this segment
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    for (const cmd of cmds) {
+      const b = getCommandBounds(cmd)
+      if (!b) continue
+      minX = Math.min(minX, b.x)
+      minY = Math.min(minY, b.y)
+      maxX = Math.max(maxX, b.x + b.w)
+      maxY = Math.max(maxY, b.y + b.h)
+    }
+    if (minX === Infinity) return
+
+    const vp = this.editor.getViewportPageBounds()
+    const MARGIN = 80
+
+    // Layer 1: only pan when shapes are outside or too close to the edge
+    const fullyVisible =
+      minX >= vp.x + MARGIN &&
+      maxX <= vp.x + vp.w - MARGIN &&
+      minY >= vp.y + MARGIN &&
+      maxY <= vp.y + vp.h - MARGIN
+    if (fullyVisible) return
+
+    // Position shapes at ~35% from the top so there's room to grow downward.
+    // centerOnPoint(y) sets the page-y at the viewport centre.
+    // We want minY at 35% from top → centerY = minY + vp.h * 0.15
+    const shapeCX = (minX + maxX) / 2
+    const targetCY = minY + vp.h * 0.15
+
+    this.editor.centerOnPoint(
+      { x: shapeCX, y: targetCY },
       { animation: { duration: 400 } },
     )
   }

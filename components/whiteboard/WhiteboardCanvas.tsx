@@ -35,8 +35,8 @@ const WhiteboardCanvas = forwardRef<WhiteboardRef>((_, ref) => {
     // Scroll wheel zooms; middle-click-drag pans (built-in)
     editor.setCameraOptions({ wheelBehavior: "zoom" });
 
-    // Default tool: select
-    editor.setCurrentTool("select");
+    // Default tool: hand (pan)
+    editor.setCurrentTool("hand");
 
     // Zoom to fit the canvas area
     editor.zoomToFit();
