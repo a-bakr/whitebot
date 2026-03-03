@@ -1,10 +1,17 @@
 'use client'
 
 import { useRef } from 'react'
-import WhiteboardCanvas from '@/components/whiteboard/WhiteboardCanvas'
+import dynamic from 'next/dynamic'
 import { TutorInterface } from '@/components/tutor/TutorInterface'
 import { useTutor } from '@/hooks/useTutor'
 import type { WhiteboardRef } from '@/components/whiteboard/WhiteboardCanvas'
+
+// ssr:false is required — tldraw calls DOM APIs during initialisation and
+// crashes the Next.js App Router server pre-render even inside 'use client'.
+const WhiteboardCanvas = dynamic(
+  () => import('@/components/whiteboard/WhiteboardCanvas'),
+  { ssr: false },
+)
 
 export default function Home() {
   const whiteboardRef = useRef<WhiteboardRef>(null)

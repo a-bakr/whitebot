@@ -11,6 +11,21 @@ const streamParams = {
   maxOutputTokens: 2048,
 } as const
 
+function textDeltaStream(result: Awaited<ReturnType<typeof streamText>>): Response {
+  const encoder = new TextEncoder()
+  const stream = new ReadableStream({
+    async start(controller) {
+      for await (const chunk of result.textStream) {
+        controller.enqueue(encoder.encode(chunk))
+      }
+      controller.close()
+    },
+  })
+  return new Response(stream, {
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+  })
+}
+
 export async function POST(req: Request) {
   const { messages } = await req.json()
 
@@ -20,7 +35,7 @@ export async function POST(req: Request) {
       ...streamParams,
       messages,
     })
-    return result.toTextStreamResponse()
+    return textDeltaStream(result)
   } catch (err) {
     console.warn('[tutor] Anthropic failed, falling back to OpenAI:', err)
     const result = await streamText({
@@ -28,6 +43,6 @@ export async function POST(req: Request) {
       ...streamParams,
       messages,
     })
-    return result.toTextStreamResponse()
+    return textDeltaStream(result)
   }
 }

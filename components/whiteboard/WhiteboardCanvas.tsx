@@ -19,13 +19,7 @@ const WhiteboardCanvas = forwardRef<WhiteboardRef>((_, ref) => {
   function handleMount(editor: Editor) {
     engineRef.current = new DrawingEngine(editor)
 
-    // Whiteboard defaults: white background, dark pen
     editor.updateInstanceState({ isDebugMode: false })
-
-    // Set the default pen color to black
-    editor.setStyleForNextShapes({ id: 'tldraw:color', type: 'tldraw:color' } as never, 'black')
-
-    // Zoom to fit the canvas area
     editor.zoomToFit()
   }
 
