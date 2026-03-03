@@ -1,21 +1,32 @@
 'use client'
 
 import { useRef, useState, type KeyboardEvent } from 'react'
-import { Send, Square } from 'lucide-react'
+import { Send, Square, MousePointer2, Pencil, Eraser, Type } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { VoiceButton } from './VoiceButton'
 import { useDeepgram } from '@/hooks/useDeepgram'
+
+const TOOLS = [
+  { id: 'select', icon: MousePointer2, label: 'Select' },
+  { id: 'draw',   icon: Pencil,        label: 'Draw'   },
+  { id: 'eraser', icon: Eraser,        label: 'Erase'  },
+  { id: 'text',   icon: Type,          label: 'Text'   },
+]
 
 interface TutorInterfaceProps {
   isThinking: boolean
   isActive: boolean
   onSend: (text: string) => void
   onStop: () => void
+  activeTool: string
+  onSetTool: (toolId: string) => void
 }
 
-export function TutorInterface({ isThinking, isActive, onSend, onStop }: TutorInterfaceProps) {
+export function TutorInterface({ isThinking, isActive, onSend, onStop, activeTool, onSetTool }: TutorInterfaceProps) {
   const [input, setInput] = useState('')
+  const [toolsOpen, setToolsOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handleTranscript = (text: string) => {
@@ -49,6 +60,37 @@ export function TutorInterface({ isThinking, isActive, onSend, onStop }: TutorIn
           onStart={start}
           onStop={stop}
         />
+
+        <Popover open={toolsOpen} onOpenChange={setToolsOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              size="icon"
+              variant={toolsOpen ? 'default' : 'ghost'}
+              className="h-10 w-10 shrink-0"
+              title="Drawing tools"
+            >
+              {(() => { const t = TOOLS.find(t => t.id === activeTool); return t ? <t.icon className="h-4 w-4" /> : null })()}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent side="top" align="center" className="w-auto p-1.5">
+            <div className="flex flex-col items-center gap-1">
+              {TOOLS.map(({ id, icon: Icon, label }) => (
+                <Button
+                  key={id}
+                  type="button"
+                  size="icon"
+                  variant={activeTool === id ? 'default' : 'ghost'}
+                  className="h-9 w-9"
+                  title={label}
+                  onClick={() => { onSetTool(id); setToolsOpen(false) }}
+                >
+                  <Icon className="h-4 w-4" />
+                </Button>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
 
         <Input
           ref={inputRef}

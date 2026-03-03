@@ -7,16 +7,20 @@ import { DrawingEngine } from "@/lib/drawing-engine";
 
 export interface WhiteboardRef {
   getEngine: () => DrawingEngine | null;
+  setTool: (toolId: string) => void;
 }
 
 const WhiteboardCanvas = forwardRef<WhiteboardRef>((_, ref) => {
   const engineRef = useRef<DrawingEngine | null>(null);
+  const editorRef = useRef<Editor | null>(null);
 
   useImperativeHandle(ref, () => ({
     getEngine: () => engineRef.current,
+    setTool: (toolId: string) => editorRef.current?.setCurrentTool(toolId),
   }));
 
   function handleMount(editor: Editor) {
+    editorRef.current = editor;
     engineRef.current = new DrawingEngine(editor);
 
     // Whiteboard defaults: white background, dark pen
@@ -27,6 +31,12 @@ const WhiteboardCanvas = forwardRef<WhiteboardRef>((_, ref) => {
       { id: "tldraw:color", type: "tldraw:color" } as never,
       "black",
     );
+
+    // Scroll wheel zooms; middle-click-drag pans (built-in)
+    editor.setCameraOptions({ wheelBehavior: "zoom" });
+
+    // Default tool: select
+    editor.setCurrentTool("select");
 
     // Zoom to fit the canvas area
     editor.zoomToFit();

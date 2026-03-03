@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { TutorInterface } from '@/components/tutor/TutorInterface'
 import { useTutor } from '@/hooks/useTutor'
@@ -16,8 +16,14 @@ const WhiteboardCanvas = dynamic(
 export default function Home() {
   const whiteboardRef = useRef<WhiteboardRef>(null)
   const getEngine = () => whiteboardRef.current?.getEngine() ?? null
+  const [activeTool, setActiveTool] = useState('select')
 
   const { isThinking, isActive, sendMessage, stop } = useTutor(getEngine)
+
+  const handleSetTool = (toolId: string) => {
+    whiteboardRef.current?.setTool(toolId)
+    setActiveTool(toolId)
+  }
 
   return (
     <main className="relative h-screen w-screen overflow-hidden">
@@ -27,6 +33,8 @@ export default function Home() {
         isActive={isActive}
         onSend={sendMessage}
         onStop={stop}
+        activeTool={activeTool}
+        onSetTool={handleSetTool}
       />
     </main>
   )
