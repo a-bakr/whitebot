@@ -16,7 +16,7 @@ export async function POST(req: Request) {
 
   try {
     const result = await streamText({
-      model: anthropic('claude-opus-4-6'),
+      model: anthropic('claude-sonnet-4-6'),
       ...streamParams,
       messages,
     })
