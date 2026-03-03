@@ -82,6 +82,12 @@ export function useDeepgram(onTranscript: (text: string) => void) {
       if (data.is_final && transcript.trim()) {
         setLiveText('')
         onTranscript(transcript.trim())
+        // Auto-stop mic once question is submitted
+        streamRef.current?.getTracks().forEach((t) => t.stop())
+        streamRef.current = null
+        conn.finish()
+        connectionRef.current = null
+        setIsListening(false)
       } else if (transcript.trim()) {
         setLiveText(transcript)
       }

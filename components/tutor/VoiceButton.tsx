@@ -1,6 +1,6 @@
 'use client'
 
-import { Mic, MicOff, Loader2 } from 'lucide-react'
+import { Mic, MicOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -27,9 +27,7 @@ export function VoiceButton({ isListening, isThinking, liveText, onStart, onStop
         disabled={isThinking}
         title={isListening ? 'Stop listening' : 'Start voice input'}
       >
-        {isThinking ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : isListening ? (
+        {isListening ? (
           <MicOff className="h-4 w-4" />
         ) : (
           <Mic className="h-4 w-4" />

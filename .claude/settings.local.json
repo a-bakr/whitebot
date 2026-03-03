@@ -8,7 +8,11 @@
       "Bash(pnpm install)",
       "Bash(pnpm type-check:*)",
       "Bash(npx tsc:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "WebFetch(domain:bertomill.medium.com)",
+      "WebFetch(domain:strapi.io)",
+      "WebFetch(domain:enhancial.substack.com)",
+      "WebFetch(domain:vercel.com)"
     ]
   }
 }
