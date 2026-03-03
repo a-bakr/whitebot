@@ -4,7 +4,8 @@
       "WebSearch",
       "Bash(cat:*)",
       "Bash(cd:*)",
-      "Bash(wsl:*)"
+      "Bash(wsl:*)",
+      "Bash(pnpm install)"
     ]
   }
 }
