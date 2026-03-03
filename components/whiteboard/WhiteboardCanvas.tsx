@@ -2,7 +2,6 @@
 
 import { useRef, forwardRef, useImperativeHandle } from 'react'
 import { Tldraw, Editor } from 'tldraw'
-import 'tldraw/tldraw.css'
 import { DrawingEngine } from '@/lib/drawing-engine'
 
 export interface WhiteboardRef {
@@ -26,6 +25,7 @@ const WhiteboardCanvas = forwardRef<WhiteboardRef>((_, ref) => {
   return (
     <div className="absolute inset-0 bottom-16">
       <Tldraw
+        licenseKey={process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY}
         onMount={handleMount}
         inferDarkMode
         hideUi
