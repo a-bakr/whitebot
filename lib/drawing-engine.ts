@@ -11,6 +11,9 @@ import type {
   LineCommand,
   BulletCommand,
   HighlightCommand,
+  UnderlineCommand,
+  CircleEmCommand,
+  SketchArrowCommand,
 } from './drawing-types'
 
 const COLOR_MAP: Record<string, DrawColor> = {
@@ -70,6 +73,15 @@ export class DrawingEngine {
         break
       case 'highlight':
         this.drawHighlight(cmd)
+        break
+      case 'underline':
+        await this.drawUnderline(cmd)
+        break
+      case 'circle-em':
+        await this.drawCircleEm(cmd)
+        break
+      case 'sketch-arrow':
+        this.drawSketchArrow(cmd)
         break
     }
   }
@@ -264,6 +276,106 @@ export class DrawingEngine {
           color: toTlColor(cmd.color ?? 'yellow'),
           fill: 'semi',
           size: 'm',
+        },
+      },
+    ])
+  }
+
+  private async drawUnderline(cmd: UnderlineCommand) {
+    const id = createShapeId()
+    const dx = cmd.x2 - cmd.x1
+    const dy = cmd.y2 - cmd.y1
+    const STEPS = 25
+    this.editor.createShapes([
+      {
+        id,
+        type: 'arrow',
+        x: cmd.x1,
+        y: cmd.y1,
+        props: {
+          start: { x: 0, y: 0 },
+          end: { x: 0, y: 0 },
+          color: toTlColor(cmd.color),
+          size: 'l',
+          dash: 'draw',
+          arrowheadEnd: 'none',
+          arrowheadStart: 'none',
+        },
+      },
+    ])
+    for (let i = 1; i <= STEPS; i++) {
+      const t = i / STEPS
+      this.editor.updateShapes([
+        {
+          id,
+          type: 'arrow',
+          props: { end: { x: dx * t, y: dy * t } },
+        },
+      ])
+      await sleep(16)
+    }
+  }
+
+  private async drawCircleEm(cmd: CircleEmCommand) {
+    const id = createShapeId()
+    const cx = cmd.x + cmd.w / 2
+    const cy = cmd.y + cmd.h / 2
+    const targetW = cmd.w + 24
+    const targetH = cmd.h + 24
+    const STEPS = 20
+    this.editor.createShapes([
+      {
+        id,
+        type: 'geo',
+        x: cx,
+        y: cy,
+        props: {
+          geo: 'ellipse',
+          w: 2,
+          h: 2,
+          color: toTlColor(cmd.color),
+          fill: 'none',
+          dash: 'draw',
+          size: 'l',
+        },
+      },
+    ])
+    for (let i = 1; i <= STEPS; i++) {
+      const t = i / STEPS
+      const w = targetW * t
+      const h = targetH * t
+      this.editor.updateShapes([
+        {
+          id,
+          type: 'geo',
+          x: cx - w / 2,
+          y: cy - h / 2,
+          props: { w, h },
+        },
+      ])
+      await sleep(16)
+    }
+  }
+
+  private drawSketchArrow(cmd: SketchArrowCommand) {
+    const dx = cmd.x2 - cmd.x1
+    const dy = cmd.y2 - cmd.y1
+    this.editor.createShapes([
+      {
+        id: createShapeId(),
+        type: 'arrow',
+        x: cmd.x1,
+        y: cmd.y1,
+        props: {
+          start: { x: 0, y: 0 },
+          end: { x: dx, y: dy },
+          richText: toRichText(cmd.label ?? ''),
+          color: toTlColor(cmd.color),
+          size: 'l',
+          dash: 'draw',
+          arrowheadEnd: 'arrow',
+          arrowheadStart: 'none',
+          font: 'draw',
         },
       },
     ])

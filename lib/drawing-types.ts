@@ -100,6 +100,37 @@ export interface HighlightCommand {
   color?: DrawColor
 }
 
+export interface UnderlineCommand {
+  t: 'draw'
+  cmd: 'underline'
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+  color?: DrawColor
+}
+
+export interface CircleEmCommand {
+  t: 'draw'
+  cmd: 'circle-em'
+  x: number
+  y: number
+  w: number
+  h: number
+  color?: DrawColor
+}
+
+export interface SketchArrowCommand {
+  t: 'draw'
+  cmd: 'sketch-arrow'
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+  label?: string
+  color?: DrawColor
+}
+
 export type DrawCommand =
   | ClearCommand
   | TitleCommand
@@ -110,6 +141,9 @@ export type DrawCommand =
   | LineCommand
   | BulletCommand
   | HighlightCommand
+  | UnderlineCommand
+  | CircleEmCommand
+  | SketchArrowCommand
 
 export interface SpeechCommand {
   t: 'speech'

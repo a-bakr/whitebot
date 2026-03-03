@@ -18,8 +18,11 @@ rect:      {"t":"draw","cmd":"rect","x":60,"y":160,"w":220,"h":80,"label":"...",
 circle:    {"t":"draw","cmd":"circle","x":600,"y":280,"r":70,"label":"...","color":"green"}
 arrow:     {"t":"draw","cmd":"arrow","x1":280,"y1":200,"x2":460,"y2":200,"label":"...","color":"red"}
 line:      {"t":"draw","cmd":"line","x1":50,"y1":400,"x2":1100,"y2":400,"color":"grey"}
-bullet:    {"t":"draw","cmd":"bullet","x":120,"y":140,"text":"...","index":0}
-highlight: {"t":"draw","cmd":"highlight","x":55,"y":150,"w":640,"h":100,"color":"yellow"}
+bullet:       {"t":"draw","cmd":"bullet","x":120,"y":140,"text":"...","index":0}
+highlight:    {"t":"draw","cmd":"highlight","x":55,"y":150,"w":640,"h":100,"color":"yellow"}
+underline:    {"t":"draw","cmd":"underline","x1":60,"y1":250,"x2":280,"y2":250,"color":"red"}
+circle-em:    {"t":"draw","cmd":"circle-em","x":50,"y":150,"w":240,"h":100,"color":"orange"}
+sketch-arrow: {"t":"draw","cmd":"sketch-arrow","x1":300,"y1":200,"x2":500,"y2":350,"label":"see this","color":"violet"}
 
 Colors: black blue green grey light-blue light-green light-red light-violet orange red violet white yellow
 text size: s m l xl
@@ -38,6 +41,9 @@ text size: s m l xl
 - Arrow labels: short verb phrase ("causes" "leads to" "equals")
 - Shape labels: 1–4 words, they are auto-centered inside the shape
 - 1–3 draw commands per speech beat
+- underline: draw after speech that mentions a specific label already on the board (x1/y1 at bottom-left of text, x2/y2 at bottom-right)
+- circle-em: spotlight an existing shape — x/y/w/h match the shape being circled (the command adds ~12px margin automatically)
+- sketch-arrow: informal pointer between ideas, less formal than arrow
 
 ## Lesson structure
 1. clear
