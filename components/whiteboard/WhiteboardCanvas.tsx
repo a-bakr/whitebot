@@ -1,25 +1,37 @@
-'use client'
+"use client";
 
-import { useRef, forwardRef, useImperativeHandle } from 'react'
-import { Tldraw, Editor } from 'tldraw'
-import { DrawingEngine } from '@/lib/drawing-engine'
+import { Editor, Tldraw } from "tldraw";
+import { forwardRef, useImperativeHandle, useRef } from "react";
+
+import { DrawingEngine } from "@/lib/drawing-engine";
 
 export interface WhiteboardRef {
-  getEngine: () => DrawingEngine | null
+  getEngine: () => DrawingEngine | null;
 }
 
 const WhiteboardCanvas = forwardRef<WhiteboardRef>((_, ref) => {
-  const engineRef = useRef<DrawingEngine | null>(null)
+  const engineRef = useRef<DrawingEngine | null>(null);
 
   useImperativeHandle(ref, () => ({
     getEngine: () => engineRef.current,
-  }))
+  }));
 
   function handleMount(editor: Editor) {
-    engineRef.current = new DrawingEngine(editor)
+    engineRef.current = new DrawingEngine(editor);
 
-    editor.updateInstanceState({ isDebugMode: false })
-    editor.zoomToFit()
+    // Whiteboard defaults: white background, dark pen
+    editor.updateInstanceState({ isDebugMode: false });
+
+    // Set the default pen color to black
+    editor.setStyleForNextShapes(
+      { id: "tldraw:color", type: "tldraw:color" } as never,
+      "black",
+    );
+
+    // Zoom to fit the canvas area
+    editor.zoomToFit();
+    editor.updateInstanceState({ isDebugMode: false });
+    editor.zoomToFit();
   }
 
   return (
@@ -29,11 +41,12 @@ const WhiteboardCanvas = forwardRef<WhiteboardRef>((_, ref) => {
         onMount={handleMount}
         inferDarkMode
         hideUi
+        licenseKey={process.env.NEXT_PUBLIC_TLDRAW_LICENSE_KEY}
       />
     </div>
-  )
-})
+  );
+});
 
-WhiteboardCanvas.displayName = 'WhiteboardCanvas'
+WhiteboardCanvas.displayName = "WhiteboardCanvas";
 
-export default WhiteboardCanvas
+export default WhiteboardCanvas;
