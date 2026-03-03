@@ -75,16 +75,20 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
           }
           const engine = getEngine()
           if (blobUrl) {
-            // Start audio and draws in the same JS tick — audio is listed first
-            // so audio.play() is called before any draw calls begin
-            await Promise.all([
-              speech.playBlob(blobUrl),
-              engine
-                ? Promise.all(
-                    seg.draws.map((cmd) => engine.executeCommand(cmd).catch(console.error)),
-                  )
-                : Promise.resolve(),
-            ])
+            // drawPromise is assigned inside the onPlaying callback so draws
+            // begin exactly when the browser starts producing audio output —
+            // not when play() is called (which has 10–100ms buffering delay).
+            let drawPromise: Promise<unknown> = Promise.resolve()
+            await speech.playBlob(blobUrl, () => {
+              if (engine) {
+                drawPromise = Promise.all(
+                  seg.draws.map((cmd) => engine.executeCommand(cmd).catch(console.error)),
+                )
+              }
+            })
+            // Wait for any remaining draw animations (e.g. title typewriter) that
+            // outlast the audio clip before moving to the next segment.
+            await drawPromise
           } else {
             if (engine) {
               await Promise.all(
