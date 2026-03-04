@@ -1,3 +1,5 @@
+import type { LayoutType } from './layout-templates'
+
 export type DrawColor =
   | 'black'
   | 'blue'
@@ -15,6 +17,8 @@ export type DrawColor =
 
 export type DrawSize = 's' | 'm' | 'l' | 'xl'
 
+// ── Legacy coordinate-based commands (still supported as fallback) ─────────
+
 export interface ClearCommand {
   t: 'draw'
   cmd: 'clear'
@@ -23,6 +27,7 @@ export interface ClearCommand {
 export interface TitleCommand {
   t: 'draw'
   cmd: 'title'
+  id?: string
   text: string
   x: number
   y: number
@@ -32,6 +37,7 @@ export interface TitleCommand {
 export interface TextCommand {
   t: 'draw'
   cmd: 'text'
+  id?: string
   text: string
   x: number
   y: number
@@ -42,6 +48,7 @@ export interface TextCommand {
 export interface RectCommand {
   t: 'draw'
   cmd: 'rect'
+  id?: string
   x: number
   y: number
   w: number
@@ -53,6 +60,7 @@ export interface RectCommand {
 export interface CircleCommand {
   t: 'draw'
   cmd: 'circle'
+  id?: string
   x: number
   y: number
   r: number
@@ -63,6 +71,7 @@ export interface CircleCommand {
 export interface ArrowCommand {
   t: 'draw'
   cmd: 'arrow'
+  id?: string
   x1: number
   y1: number
   x2: number
@@ -74,6 +83,7 @@ export interface ArrowCommand {
 export interface LineCommand {
   t: 'draw'
   cmd: 'line'
+  id?: string
   x1: number
   y1: number
   x2: number
@@ -84,6 +94,7 @@ export interface LineCommand {
 export interface BulletCommand {
   t: 'draw'
   cmd: 'bullet'
+  id?: string
   x: number
   y: number
   text: string
@@ -93,6 +104,7 @@ export interface BulletCommand {
 export interface HighlightCommand {
   t: 'draw'
   cmd: 'highlight'
+  id?: string
   x: number
   y: number
   w: number
@@ -103,6 +115,7 @@ export interface HighlightCommand {
 export interface UnderlineCommand {
   t: 'draw'
   cmd: 'underline'
+  id?: string
   x1: number
   y1: number
   x2: number
@@ -113,6 +126,7 @@ export interface UnderlineCommand {
 export interface CircleEmCommand {
   t: 'draw'
   cmd: 'circle-em'
+  id?: string
   x: number
   y: number
   w: number
@@ -123,12 +137,58 @@ export interface CircleEmCommand {
 export interface SketchArrowCommand {
   t: 'draw'
   cmd: 'sketch-arrow'
+  id?: string
   x1: number
   y1: number
   x2: number
   y2: number
   label?: string
   color?: DrawColor
+}
+
+// ── Semantic layout commands (Phase 2 / 3) ────────────────────────────────
+
+/** Declare a new layout section. Engine picks Y automatically. */
+export interface SectionCommand {
+  t: 'draw'
+  cmd: 'section'
+  id: string
+  layout: LayoutType
+  title: string
+  /** Hint for cycle / mindmap layouts — how many nodes total. */
+  nodes?: number
+}
+
+/** Place a node into a section. Engine computes pixel position from template. */
+export interface NodeCommand {
+  t: 'draw'
+  cmd: 'node'
+  id: string
+  section: string
+  shape: 'rect' | 'circle' | 'diamond' | 'text'
+  label: string
+  color?: DrawColor
+}
+
+/** Connect two nodes by semantic ID. Engine resolves real edge coordinates. */
+export interface EdgeCommand {
+  t: 'draw'
+  cmd: 'edge'
+  from: string
+  to: string
+  label?: string
+  color?: DrawColor
+}
+
+/** Place a text annotation anchored to a semantic node. */
+export interface NoteCommand {
+  t: 'draw'
+  cmd: 'note'
+  anchor: string
+  pos: 'above' | 'below' | 'left' | 'right' | 'inside'
+  text: string
+  color?: DrawColor
+  size?: DrawSize
 }
 
 export type DrawCommand =
@@ -144,10 +204,19 @@ export type DrawCommand =
   | UnderlineCommand
   | CircleEmCommand
   | SketchArrowCommand
+  | SectionCommand
+  | NodeCommand
+  | EdgeCommand
+  | NoteCommand
 
 export interface SpeechCommand {
   t: 'speech'
   text: string
 }
 
-export type TutorCommand = DrawCommand | SpeechCommand
+export interface FollowupCommand {
+  t: 'followup'
+  questions: string[]
+}
+
+export type TutorCommand = DrawCommand | SpeechCommand | FollowupCommand

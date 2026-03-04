@@ -20,6 +20,7 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isThinking, setIsThinking] = useState(false);
   const [isActive, setIsActive] = useState(false);
+  const [followupQuestions, setFollowupQuestions] = useState<string[]>([]);
   const speech = useSpeech();
   const abortRef = useRef<AbortController | null>(null);
   const segmentQueueRef = useRef<Segment[]>([]);
@@ -38,6 +39,7 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
       setMessages(nextMessages);
       setIsThinking(true);
       setIsActive(true);
+      setFollowupQuestions([]);
 
       // Stop any ongoing speech and executor
       speech.stop();
@@ -75,13 +77,9 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
           }
           const engine = getEngine();
           if (blobUrl) {
-            // drawPromise is assigned inside the onPlaying callback so draws
-            // begin exactly when the browser starts producing audio output —
-            // not when play() is called (which has 10–100ms buffering delay).
             let drawPromise: Promise<unknown> = Promise.resolve();
             await speech.playBlob(blobUrl, () => {
               if (engine) {
-                // Pan camera to show upcoming shapes (skipped if user recently touched camera)
                 engine.panToShowDrawCommands(seg.draws);
                 drawPromise = Promise.all(
                   seg.draws.map((cmd) =>
@@ -90,8 +88,6 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
                 );
               }
             });
-            // Wait for any remaining draw animations (e.g. title typewriter) that
-            // outlast the audio clip before moving to the next segment.
             await drawPromise;
           } else {
             if (engine) {
@@ -109,27 +105,25 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
       }
 
       try {
-        // Capture canvas context before fetch so AI knows where to draw
+        // Capture canvas snapshot before fetch so AI knows where to draw
         const engine = getEngine();
-        const yOffset = engine?.getNextSectionY() ?? 55;
-        const viewport = engine?.getViewportBounds() ?? {
-          x: 0,
-          y: 0,
-          w: 1200,
-          h: 750,
-        };
+        const canvasSnapshot = engine?.getState().toSnapshot()
+          ?? "CANVAS: empty\nnext_section_y: 55";
+
+        // Scroll to the upcoming section Y
+        const nextY = engine?.getState().getNextSectionY() ?? 55;
 
         const res = await fetch("/api/tutor", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: nextMessages, yOffset, viewport }),
+          body: JSON.stringify({ messages: nextMessages, canvasSnapshot }),
           signal: controller.signal,
         });
 
         if (!res.ok || !res.body) throw new Error(`API error ${res.status}`);
 
-        // Scroll to the new section before drawing starts
-        engine?.scrollToSection(yOffset);
+        // Scroll camera to the upcoming draw region
+        engine?.scrollToSection(nextY);
 
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
@@ -153,13 +147,12 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
             try {
               cmd = JSON.parse(trimmed);
             } catch {
-              // Skip non-JSON lines (e.g. Vercel AI SDK data prefix characters)
               continue;
             }
 
             assistantContent += trimmed + "\n";
 
-            // Safety guard: skip unexpected clear commands
+            // Safety guard: block unexpected clear commands
             if (cmd.t === "draw" && cmd.cmd === "clear") {
               const lastUserMsg =
                 nextMessages
@@ -169,39 +162,33 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
               const userWantsClear =
                 /\b(clear|erase|start\s*over|wipe|reset)\b/.test(lastUserMsg);
               if (!userWantsClear) {
-                console.warn(
-                  "[useTutor] Skipping unexpected clear command from AI",
-                );
+                console.warn("[useTutor] Skipping unexpected clear command from AI");
                 continue;
               }
             }
 
             if (cmd.t === "speech") {
-              // Finalize previous segment into queue
               if (currentSegment) {
                 segmentQueueRef.current.push(currentSegment);
               }
-              // Start new segment and immediately kick off TTS fetch
               currentSegment = {
                 speechText: cmd.text,
                 draws: [],
                 ttsPromise: speech.prefetch(cmd.text),
               };
-              // Start executor if not already running
               if (!executorRunningRef.current) {
                 runSegments();
               }
             } else if (cmd.t === "draw") {
               if (currentSegment) {
-                // Accumulate draws for the current segment
                 currentSegment.draws.push(cmd);
               } else {
                 // Pre-speech draw (e.g. clear) — execute immediately
-                const engine = getEngine();
-                if (engine) {
-                  engine.executeCommand(cmd).catch(console.error);
-                }
+                const eng = getEngine();
+                if (eng) eng.executeCommand(cmd).catch(console.error);
               }
+            } else if (cmd.t === "followup") {
+              setFollowupQuestions(cmd.questions ?? []);
             }
           }
         }
@@ -243,5 +230,12 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
     setIsActive(false);
   }, [speech]);
 
-  return { messages, isThinking, isActive, sendMessage, stop: stopAll };
+  return {
+    messages,
+    isThinking,
+    isActive,
+    followupQuestions,
+    sendMessage,
+    stop: stopAll,
+  };
 }
