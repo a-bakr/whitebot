@@ -369,11 +369,13 @@ export class DrawingEngine {
   // ── Semantic layout commands ───────────────────────────────────────────────
 
   private async drawSection(cmd: SectionCommand) {
+    const totalNodes = cmd.plan ? cmd.plan.length : (cmd.nodes ?? 6)
     const sec = this.state.startSection(
       cmd.id,
       cmd.layout,
       cmd.title,
-      cmd.nodes ?? 6,
+      totalNodes,
+      cmd.plan,
     )
 
     // Draw a grey divider line above the section (skip for the very first section)
@@ -392,8 +394,8 @@ export class DrawingEngine {
   }
 
   private drawNode(cmd: NodeCommand) {
-    // Compute position from layout template
-    const slot = this.state.computeNodeBounds(cmd.section, cmd.shape)
+    // Compute position — uses pre-computed slot when section was declared with a plan
+    const slot = this.state.computeNodeBounds(cmd.section, cmd.shape, cmd.id)
 
     // Collision guard as safety net
     const safe = this.state.findFreeRect(slot)

@@ -1,5 +1,6 @@
 import { Box, Editor, TLShapeId } from 'tldraw'
 import { computeSlot, type LayoutType, type SlotBounds } from './layout-templates'
+import type { PlanEntry } from './drawing-types'
 
 export interface ShapeRecord {
   semanticId: string
@@ -11,13 +12,15 @@ export interface ShapeRecord {
 }
 
 export interface SectionRecord {
-  id:         string
-  layout:     LayoutType
-  title:      string
-  yStart:     number
-  nodeIds:    string[]   // semantic IDs in insertion order
-  nodeCount:  number     // = nodeIds.length, cached for convenience
-  maxNodes:   number     // hint for cycle / mindmap (default 6)
+  id:           string
+  layout:       LayoutType
+  title:        string
+  yStart:       number
+  nodeIds:      string[]   // semantic IDs in insertion order
+  nodeCount:    number     // = nodeIds.length, cached for convenience
+  maxNodes:     number     // hint for cycle / mindmap (default 6)
+  /** Pre-computed slot positions keyed by node semantic ID (from plan). */
+  pendingSlots: Map<string, SlotBounds>
 }
 
 export class CanvasStateManager {
@@ -77,10 +80,31 @@ export class CanvasStateManager {
 
   // ── Section management ───────────────────────────────────────────────────
 
-  startSection(id: string, layout: LayoutType, title: string, maxNodes = 6): SectionRecord {
-    const yStart = this.getNextSectionY()
+  startSection(
+    id:       string,
+    layout:   LayoutType,
+    title:    string,
+    maxNodes  = 6,
+    plan?:    PlanEntry[],
+  ): SectionRecord {
+    const yStart  = this.getNextSectionY()
+    const vp      = this.editor.getViewportPageBounds()
+    const canvasW = Math.round(vp.w)
+    const total   = plan ? plan.length : maxNodes
+
+    // Pre-compute all slot positions when a plan is provided
+    const pendingSlots = new Map<string, SlotBounds>()
+    if (plan && plan.length > 0) {
+      plan.forEach((entry, index) => {
+        const slot = computeSlot(layout, index, entry.shape ?? 'rect', yStart, canvasW, [], total)
+        pendingSlots.set(entry.id, slot)
+      })
+    }
+
     const record: SectionRecord = {
-      id, layout, title, yStart, nodeIds: [], nodeCount: 0, maxNodes,
+      id, layout, title, yStart, nodeIds: [], nodeCount: 0,
+      maxNodes: total,
+      pendingSlots,
     }
     this.sections.set(id, record)
     return record
@@ -93,22 +117,28 @@ export class CanvasStateManager {
   // ── Node placement ───────────────────────────────────────────────────────
 
   /**
-   * Compute where to place the next node in a section, using the layout template.
-   * Returns the slot bounds in page-space coordinates.
+   * Compute where to place a node in a section.
+   * If the section was declared with a plan, returns the pre-computed slot.
+   * Otherwise falls back to live slot-index computation.
    */
-  computeNodeBounds(sectionId: string, shape: string): SlotBounds {
+  computeNodeBounds(sectionId: string, shape: string, nodeId?: string): SlotBounds {
     const section = this.sections.get(sectionId)
     if (!section) {
       // Fallback: stack below existing content
       return { x: 60, y: this.getNextSectionY(), w: 240, h: 100 }
     }
 
-    // Collect bounds of already-placed nodes in this section
+    // Use pre-computed slot from plan when available
+    if (nodeId && section.pendingSlots.has(nodeId)) {
+      return section.pendingSlots.get(nodeId)!
+    }
+
+    // Live computation (no plan, or node not in plan)
     const placedSlots: SlotBounds[] = section.nodeIds
       .map(id => this.getBounds(id))
       .filter((b): b is NonNullable<typeof b> => b !== null)
 
-    const vp     = this.editor.getViewportPageBounds()
+    const vp      = this.editor.getViewportPageBounds()
     const canvasW = Math.round(vp.w)
 
     return computeSlot(
@@ -127,7 +157,7 @@ export class CanvasStateManager {
   getNextSectionY(): number {
     const bounds = this.editor.getCurrentPageBounds()
     if (!bounds) return 55
-    return Math.ceil(bounds.maxY) + 100
+    return Math.ceil(bounds.maxY) + 80
   }
 
   /**
@@ -269,7 +299,7 @@ export class CanvasStateManager {
    */
   toSnapshot(): string {
     const page  = this.editor.getCurrentPageBounds()
-    const nextY = page ? Math.ceil(page.maxY) + 100 : 55
+    const nextY = page ? Math.ceil(page.maxY) + 80 : 55
 
     if (this.sections.size === 0 && this.shapes.size === 0) {
       return `CANVAS: empty\nnext_section_y: ${nextY}`

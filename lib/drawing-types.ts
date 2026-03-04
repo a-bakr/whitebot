@@ -148,6 +148,13 @@ export interface SketchArrowCommand {
 
 // ── Semantic layout commands (Phase 2 / 3) ────────────────────────────────
 
+/** Single node entry in a section plan. */
+export interface PlanEntry {
+  id: string
+  shape: 'rect' | 'circle' | 'diamond' | 'text'
+  label?: string
+}
+
 /** Declare a new layout section. Engine picks Y automatically. */
 export interface SectionCommand {
   t: 'draw'
@@ -155,7 +162,13 @@ export interface SectionCommand {
   id: string
   layout: LayoutType
   title: string
-  /** Hint for cycle / mindmap layouts — how many nodes total. */
+  /**
+   * Full node plan — declare ALL nodes upfront so the engine can
+   * pre-compute a perfectly centred layout before any node is drawn.
+   * Replaces the old `nodes` count hint.
+   */
+  plan?: PlanEntry[]
+  /** Legacy count hint (still accepted; ignored when plan is provided). */
   nodes?: number
 }
 

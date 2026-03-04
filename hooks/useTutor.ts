@@ -79,27 +79,25 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
           if (blobUrl) {
             let drawPromise: Promise<unknown> = Promise.resolve();
             let drawStarted = false;
-            await speech.playBlob(blobUrl, async () => {
+            await speech.playBlob(blobUrl, async (durationMs: number) => {
               if (engine && !drawStarted) {
                 drawStarted = true;
-                // Start drawing after a short delay to ensure audio is playing
                 drawPromise = (async () => {
-                  await new Promise((r) => setTimeout(r, 100));
-                  // Execute each draw command sequentially with delays
-                  for (let i = 0; i < seg.draws.length; i++) {
+                  const n = seg.draws.length;
+                  if (n === 0) return;
+                  // Spread draws evenly so last draw lands ~500ms before speech ends.
+                  // gap = time between successive draws; min 250ms so each is visible.
+                  const gap = n > 1
+                    ? Math.max(250, (durationMs - 500) / (n - 1))
+                    : 0;
+                  for (let i = 0; i < n; i++) {
                     const cmd = seg.draws[i];
                     await engine.executeCommand(cmd).catch(console.error);
-                    // Pan camera to follow newly drawn shapes (nodes, notes, sections)
                     if (cmd.cmd === 'node' || cmd.cmd === 'note' || cmd.cmd === 'section') {
                       engine.panToLatestShape();
                     }
-                    // Add delay between commands (longer for text/titles, shorter for shapes)
-                    if (i < seg.draws.length - 1) {
-                      const delayMs =
-                        (cmd.cmd === 'title' || cmd.cmd === 'text') ? 300 :
-                        (cmd.cmd === 'section') ? 400 :
-                        200;
-                      await new Promise((r) => setTimeout(r, delayMs));
+                    if (i < n - 1) {
+                      await new Promise((r) => setTimeout(r, gap));
                     }
                   }
                 })();
@@ -108,21 +106,19 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
             await drawPromise;
           } else {
             if (engine) {
-              // Execute each draw command sequentially with delays
-              for (let i = 0; i < seg.draws.length; i++) {
+              const n = seg.draws.length;
+              // Estimate duration from word count (2.5 words/sec) when no TTS
+              const wordCount = seg.speechText.trim().split(/\s+/).length;
+              const estimatedMs = Math.max(1000, (wordCount / 2.5) * 1000);
+              const gap = n > 1 ? Math.max(250, (estimatedMs - 500) / (n - 1)) : 0;
+              for (let i = 0; i < n; i++) {
                 const cmd = seg.draws[i];
                 await engine.executeCommand(cmd).catch(console.error);
-                // Pan camera to follow newly drawn shapes (nodes, notes, sections)
                 if (cmd.cmd === 'node' || cmd.cmd === 'note' || cmd.cmd === 'section') {
                   engine.panToLatestShape();
                 }
-                // Add delay between commands
-                if (i < seg.draws.length - 1) {
-                  const delayMs =
-                    (cmd.cmd === 'title' || cmd.cmd === 'text') ? 300 :
-                    (cmd.cmd === 'section') ? 400 :
-                    200;
-                  await new Promise((r) => setTimeout(r, delayMs));
+                if (i < n - 1) {
+                  await new Promise((r) => setTimeout(r, gap));
                 }
               }
             }

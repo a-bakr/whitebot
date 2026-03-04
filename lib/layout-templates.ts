@@ -22,8 +22,8 @@ const SHAPE_SIZE: Record<string, { w: number; h: number }> = {
   text:    { w: 420, h: 36 },
 }
 
-const H_GAP  = 120  // horizontal clearance edge-to-edge
-const V_GAP  = 80   // vertical clearance edge-to-edge
+const H_GAP  = 60   // horizontal clearance edge-to-edge
+const V_GAP  = 50   // vertical clearance edge-to-edge
 const PAD    = 60   // canvas left/right padding
 const TITLE_H = 80  // space reserved for the section title above content
 
@@ -56,13 +56,23 @@ export function computeSlot(
   const usableW  = canvasW - PAD * 2
 
   switch (layout) {
-    // ── Left-to-right flow ────────────────────────────────────────────────
+    // ── Left-to-right flow (centred per row) ─────────────────────────────
     case 'flow-lr': {
       const nodesPerRow = Math.max(1, Math.floor((usableW + H_GAP) / (sz.w + H_GAP)))
       const row = Math.floor(slotIndex / nodesPerRow)
       const col = slotIndex % nodesPerRow
+
+      // Centre the row: when totalNodes is known, compute exact count per row
+      const firstInRow = row * nodesPerRow
+      const lastInRow  = totalNodes > 0
+        ? Math.min((row + 1) * nodesPerRow - 1, totalNodes - 1)
+        : firstInRow + nodesPerRow - 1
+      const nodesInRow = lastInRow - firstInRow + 1
+      const rowWidth   = nodesInRow * sz.w + (nodesInRow - 1) * H_GAP
+      const startX     = Math.round(canvasW / 2 - rowWidth / 2)
+
       return {
-        x: PAD + col * (sz.w + H_GAP),
+        x: startX + col * (sz.w + H_GAP),
         y: contentY + row * (sz.h + V_GAP),
         ...sz,
       }

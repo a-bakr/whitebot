@@ -50,9 +50,9 @@ export function useSpeech() {
   }, [])
 
   // onPlaying fires when audio actually starts producing sound (the 'playing' event).
-  // Use this to synchronize draw commands with real audio output.
+  // durationMs is the actual audio length — use it to pace drawings.
   const playBlob = useCallback(
-    (url: string, onPlaying?: () => void): Promise<void> => {
+    (url: string, onPlaying?: (durationMs: number) => void): Promise<void> => {
       return playBlobUrl(url, currentAudioRef, onPlaying)
     },
     [],
@@ -75,15 +75,20 @@ async function prefetchTTS(text: string): Promise<string> {
 async function playBlobUrl(
   url: string,
   currentAudioRef: { current: HTMLAudioElement | null },
-  onPlaying?: () => void,
+  onPlaying?: (durationMs: number) => void,
 ): Promise<void> {
   return new Promise<void>((resolve) => {
     const audio = new Audio(url)
     currentAudioRef.current = audio
 
     // 'playing' fires when audio is actually producing sound (after buffering).
-    // This is the right moment to start drawing — not when play() is called.
-    audio.addEventListener('playing', () => onPlaying?.(), { once: true })
+    // audio.duration is available at this point for blob URLs (fully downloaded).
+    audio.addEventListener('playing', () => {
+      const durationMs = isFinite(audio.duration) && audio.duration > 0
+        ? audio.duration * 1000
+        : 0
+      onPlaying?.(durationMs)
+    }, { once: true })
 
     const cleanup = () => {
       URL.revokeObjectURL(url)
@@ -96,12 +101,12 @@ async function playBlobUrl(
     }
     audio.onerror = () => {
       // Still trigger draws so the lesson isn't stuck if TTS fails
-      onPlaying?.()
+      onPlaying?.(0)
       cleanup()
       resolve()
     }
     audio.play().catch(() => {
-      onPlaying?.()
+      onPlaying?.(0)
       cleanup()
       resolve()
     })

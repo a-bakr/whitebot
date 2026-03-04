@@ -132,40 +132,153 @@ pnpm add tldraw ai @ai-sdk/openai @deepgram/sdk elevenlabs
 
 ---
 
-## Audio-Drawing Synchronization
+# Audio-Drawing Synchronization Fix Plan
 
-### Problem
-Audio (TTS) plays faster than drawings appear — AI finishes speaking before visuals are fully drawn.
+## Problem Statement
 
-### Approach: Speech-Duration-Based Pacing (Option 2)
-Estimate speech duration from text length and distribute draw commands evenly across that duration.
+The audio (TTS) plays significantly faster than the drawings appear on the whiteboard, creating a poor user experience where the AI has finished speaking before the visual elements are fully drawn.
+
+## Root Cause Analysis
+
+### Current Flow
+
+1. **Stream arrives** → AI sends NDJSON with interleaved `speech` and `draw` commands
+2. **TTS prefetch** → When `{"t":"speech","text":"..."}` arrives, audio blob is fetched immediately ([useTutor.ts:182](hooks/useTutor.ts#L182))
+3. **Audio plays** → When audio starts playing, the `onPlaying` callback fires ([useTutor.ts:81-93](hooks/useTutor.ts#L81-L93))
+4. **Drawings execute** → All draw commands in `seg.draws` execute sequentially as fast as possible
+5. **Result** → Drawings finish in 1-2 seconds while speech may take 5-10 seconds
+
+### Key Issues
+
+- No pacing mechanism for drawings
+- Draw commands execute at maximum speed (only limited by tldraw API)
+- No correlation between speech duration and drawing pace
+- Text animation ([drawing-engine.ts:173-180](lib/drawing-engine.ts#L173-L180)) runs at fixed 22ms/char, but other shapes appear instantly
+
+## Proposed Solutions
+
+### Option 1: Simple Delay Between Commands ⭐ FASTEST
+
+**Complexity:** Low
+**Effectiveness:** Medium
+**Implementation:** Add fixed delay (200-400ms) between each draw command
 
 ```typescript
-// lib/speech-utils.ts
-export function estimateSpeechDuration(text: string): number {
-  const wordCount = text.trim().split(/\s+/).length;
-  // Deepgram Aura average: ~150 words/min = 2.5 words/sec
-  const durationMs = (wordCount / 2.5) * 1000;
-  return Math.max(durationMs, 1000); // Minimum 1 second
+// In useTutor.ts runSegments()
+for (const cmd of seg.draws) {
+  await engine.executeCommand(cmd).catch(console.error);
+  await sleep(300); // Fixed delay
+  if (cmd.cmd === 'node' || cmd.cmd === 'note' || cmd.cmd === 'section') {
+    engine.panToLatestShape();
+  }
 }
 ```
 
+**Pros:**
+
+- Minimal code changes
+- Predictable behavior
+- Easy to tune
+
+**Cons:**
+
+- Not adaptive to speech length
+- May be too slow or too fast depending on content
+
+---
+
+### Option 2: Speech-Duration-Based Pacing ⭐⭐ RECOMMENDED
+
+**Complexity:** Medium
+**Effectiveness:** High
+**Implementation:** Estimate speech duration from text length and distribute drawings evenly
+
 ```typescript
-// In useTutor.ts runSegments() — hybrid with min/max clamp
-const baseDuration = estimateSpeechDuration(seg.speechText);
-const calculatedDelay = seg.draws.length > 0 ? baseDuration / seg.draws.length : 0;
-const drawDelay = Math.max(200, Math.min(800, calculatedDelay));
+// Estimate speech duration (average: ~150 words/min = 2.5 words/sec)
+function estimateSpeechDuration(text: string): number {
+  const wordCount = text.trim().split(/\s+/).length;
+  const durationMs = (wordCount / 2.5) * 1000;
+  return Math.max(durationMs, 1000); // Minimum 1 second
+}
+
+// In runSegments()
+const estimatedDuration = estimateSpeechDuration(seg.speechText);
+const drawDelay = seg.draws.length > 0
+  ? estimatedDuration / seg.draws.length
+  : 0;
 
 for (const cmd of seg.draws) {
   await engine.executeCommand(cmd).catch(console.error);
   await sleep(drawDelay);
+  // ... pan logic
 }
 ```
 
-### Files
-- `lib/speech-utils.ts` (new) — `estimateSpeechDuration(text)`
-- `hooks/useTutor.ts` — apply `drawDelay` between draw commands in `runSegments()`
+**Pros:**
 
-### Tuning
-- Min delay: 200ms/command · Max delay: 800ms/command
-- Optional: `NEXT_PUBLIC_DRAWING_PACE_FACTOR=1.0` env var (0.5 = faster, 2.0 = slower)
+- Adaptive to speech length
+- Maintains "teaching while drawing" experience
+- Drawings finish roughly when speech finishes
+- Natural pacing
+
+**Cons:**
+
+- Estimation may be slightly off (depends on TTS speed)
+- Requires calculation logic
+
+---
+
+### Option 3: Audio-Completion-First Drawing
+
+**Complexity:** Low
+**Effectiveness:** Low
+**Implementation:** Wait for audio to finish, then draw all commands
+
+```typescript
+// In runSegments()
+if (blobUrl) {
+  await speech.playBlob(blobUrl); // Wait for audio to finish
+  // Then draw everything
+  for (const cmd of seg.draws) {
+    await engine.executeCommand(cmd).catch(console.error);
+  }
+}
+```
+
+**Pros:**
+
+- Perfect synchronization
+- Simple implementation
+
+**Cons:**
+
+- **Loses the "live drawing" experience** - defeats the purpose of an interactive whiteboard tutor
+- User sees nothing while audio plays
+- Not recommended for this use case
+
+---
+
+### Option 4: Progressive Drawing with Audio Timeline Tracking
+
+**Complexity:** High
+**Effectiveness:** Very High
+**Implementation:** Track audio playback progress via `audio.currentTime` and trigger drawings at calculated intervals
+
+```typescript
+// Requires HTMLAudioElement.currentTime monitoring
+// Map draw commands to timeline positions
+// Trigger each command when currentTime reaches its position
+```
+
+**Pros:**
+
+- Most accurate synchronization
+- Professional-quality experience
+- Drawings truly sync with speech content
+
+**Cons:**
+
+- Complex implementation
+- Requires audio timeline monitoring
+- May have browser compatibility concerns
+- Overkill for MVP
