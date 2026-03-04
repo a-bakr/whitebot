@@ -3,7 +3,12 @@
     "allow": [
       "Bash(npx tsc --noEmit)",
       "Bash(pnpm type-check:*)",
-      "mcp__ide__getDiagnostics"
+      "mcp__ide__getDiagnostics",
+      "Bash(rm:*)",
+      "Bash(pnpm drizzle-kit:*)",
+      "Bash(git log:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []

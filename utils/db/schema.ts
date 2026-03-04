@@ -1,16 +1,13 @@
-import { integer, pgTable, text, timestamp } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core';
 
-export const usersTable = pgTable('users_table', {
-    id: text('id').primaryKey(),
+export const users = pgTable('users', {
+    id: uuid('id').primaryKey(), // Supabase auth.users UUID
     name: text('name').notNull(),
     email: text('email').notNull().unique(),
-    plan: text('plan').notNull(),
     role: text('role').notNull().default('user'),
-    stripe_id: text('stripe_id').notNull(),
-    api_user_id: text('api_user_id').unique(),
-    created_at: timestamp('created_at').notNull().defaultNow(),
-    updated_at: timestamp('updated_at').notNull().defaultNow(),
+    created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updated_at: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 
-export type InsertUser = typeof usersTable.$inferInsert;
-export type SelectUser = typeof usersTable.$inferSelect;
+export type InsertUser = typeof users.$inferInsert;
+export type SelectUser = typeof users.$inferSelect;

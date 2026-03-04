@@ -66,7 +66,6 @@ export async function updateSession(request: NextRequest) {
         url.pathname = '/login'
         return NextResponse.redirect(url)
     }
-    // If user is logged in, redirect to dashboard
     if (user && request.nextUrl.pathname === '/') {
         url.pathname = '/dashboard'
         return NextResponse.redirect(url)

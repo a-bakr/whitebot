@@ -3,13 +3,13 @@
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useFormState } from 'react-dom'
+import { useActionState } from 'react'
 import { loginUser } from '@/app/auth/actions'
 export default function LoginForm() {
     const initialState = {
         message: ''
     }
-    const [formState, formAction] = useFormState(loginUser, initialState)
+    const [formState, formAction] = useActionState(loginUser, initialState)
     return (<>
         <form action={formAction}>
             <div className="grid gap-2">

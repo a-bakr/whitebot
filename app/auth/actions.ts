@@ -2,11 +2,9 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from "next/navigation"
 import { revalidatePath } from 'next/cache'
-import { createStripeCustomer } from '@/utils/stripe/api'
 import { db } from '@/utils/db/db'
-import { usersTable } from '@/utils/db/schema'
+import { users } from '@/utils/db/schema'
 import { eq } from 'drizzle-orm'
-import { getRoleBasedRedirectPath } from '@/utils/auth/permissions'
 
 const PUBLIC_URL = process.env.NEXT_PUBLIC_WEBSITE_URL ? process.env.NEXT_PUBLIC_WEBSITE_URL : "http://localhost:3000"
 
@@ -56,8 +54,7 @@ export async function signup(currentState: { message: string }, formData: FormDa
     }
 
     try {
-        // Check if user exists in our database first
-        const existingDBUser = await db.select().from(usersTable).where(eq(usersTable.email, data.email))
+        const existingDBUser = await db.select().from(users).where(eq(users.email, data.email))
 
         if (existingDBUser.length > 0) {
             return { message: "An account with this email already exists. Please login instead." }
@@ -67,10 +64,8 @@ export async function signup(currentState: { message: string }, formData: FormDa
             email: data.email,
             password: data.password,
             options: {
-                emailRedirectTo: `${PUBLIC_URL}/auth/callback?next=/subscribe`,
+                emailRedirectTo: `${PUBLIC_URL}/auth/callback`,
                 data: {
-                    // Disable email confirmation in development for easier testing
-                    // In production, you may want to enable this: email_confirm: true
                     email_confirm: false,
                     full_name: data.name
                 }
@@ -88,25 +83,17 @@ export async function signup(currentState: { message: string }, formData: FormDa
             return { message: "Failed to create user" }
         }
 
-        // create Stripe Customer Record using signup response data
-        const stripeID = await createStripeCustomer(signUpData.user.id, signUpData.user.email!, data.name)
-
-        // Create record in DB with plan set to 'none' initially
-        await db.insert(usersTable).values({
+        await db.insert(users).values({
             id: signUpData.user.id,
             name: data.name,
             email: signUpData.user.email!,
-            stripe_id: stripeID,
-            plan: 'none',
-            api_user_id: null,
         })
 
         revalidatePath('/', 'layout')
-        redirect('/subscribe')
+        redirect('/dashboard')
     } catch (error) {
-        // Check if this is a Next.js redirect (not a real error)
         if (error instanceof Error && error.message === 'NEXT_REDIRECT') {
-            throw error; // Re-throw redirect errors to let Next.js handle them
+            throw error;
         }
 
         console.error('Error in signup:', error)
@@ -129,10 +116,7 @@ export async function loginUser(currentState: { message: string }, formData: For
     }
 
     revalidatePath('/', 'layout')
-
-    // Get role-based redirect path and redirect
-    const redirectPath = await getRoleBasedRedirectPath('/dashboard', 'login')
-    redirect(redirectPath)
+    redirect('/dashboard')
 }
 
 
@@ -173,4 +157,3 @@ export async function signInWithGoogle() {
         return { error: 'Failed to initiate Google OAuth' }
     }
 }
-
