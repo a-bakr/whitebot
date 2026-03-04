@@ -1,25 +1,19 @@
 import type {
-  ArrowCommand,
-  BulletCommand,
+  BoxCommand,
   CircleCommand,
-  CircleEmCommand,
+  ConnectCommand,
+  DiamondCommand,
   DrawColor,
   DrawCommand,
   DrawSize,
-  EdgeCommand,
+  HeadingCommand,
   HighlightCommand,
-  LineCommand,
-  NodeCommand,
-  NoteCommand,
-  RectCommand,
-  SectionCommand,
-  SketchArrowCommand,
+  Rel,
   TextCommand,
-  TitleCommand,
-  UnderlineCommand,
 } from "./drawing-types";
-import { CANVAS_W, CanvasStateManager } from "./canvas-state";
 import { Editor, TLShapeId, createShapeId, toRichText } from "tldraw";
+
+// ── Colour mapping ────────────────────────────────────────────────────────────
 
 const COLOR_MAP: Record<string, DrawColor> = {
   blue: "blue",
@@ -47,51 +41,150 @@ function sleep(ms: number) {
   return new Promise<void>((r) => setTimeout(r, ms));
 }
 
-// ── Estimated bounds for pre-draw collision checks ────────────────────────
-// These are conservative estimates; actual registered bounds come from tldraw.
-function estimateBounds(
-  cmd: DrawCommand,
-): { x: number; y: number; w: number; h: number } | null {
-  switch (cmd.cmd) {
-    case "title":
-      return { x: cmd.x, y: cmd.y, w: 400, h: 70 };
-    case "text":
-      return { x: cmd.x, y: cmd.y, w: 350, h: 40 };
-    case "rect":
-      return { x: cmd.x, y: cmd.y, w: cmd.w, h: cmd.h };
-    case "circle":
-      return { x: cmd.x - cmd.r, y: cmd.y - cmd.r, w: cmd.r * 2, h: cmd.r * 2 };
-    case "bullet":
-      return { x: cmd.x, y: cmd.y + cmd.index * 40, w: 400, h: 40 };
-    case "highlight":
-      return { x: cmd.x, y: cmd.y, w: cmd.w, h: cmd.h };
-    case "circle-em":
-      return { x: cmd.x, y: cmd.y, w: cmd.w, h: cmd.h };
-    default:
-      return null;
-  }
+// ── Default shape sizes (canvas units) ────────────────────────────────────────
+
+const SIZES = {
+  box: { w: 240, h: 90 },
+  circle: { w: 130, h: 130 },
+  diamond: { w: 200, h: 110 },
+} as const;
+
+/** Horizontal gap between shapes when using relational positioning. */
+const H_GAP = 70;
+/** Vertical gap between shapes when using relational positioning. */
+const V_GAP = 60;
+/** Left margin for auto-placed shapes. */
+const PAD = 80;
+
+// ── Shape registry ────────────────────────────────────────────────────────────
+
+interface ShapeRecord {
+  tldrawId: TLShapeId;
 }
 
+// ── DrawingEngine ─────────────────────────────────────────────────────────────
+
 export class DrawingEngine {
-  private state: CanvasStateManager;
-  private _lastUserInteraction = 0;
+  private shapes = new Map<string, ShapeRecord>();
+  private _autoN = 0;
 
-  constructor(private editor: Editor) {
-    this.state = new CanvasStateManager(editor);
-    this._subscribeToUserInteraction();
+  constructor(private editor: Editor) {}
+
+  // ── Internal helpers ────────────────────────────────────────────────────────
+
+  private nextAutoId(): string {
+    return `_a${++this._autoN}`;
   }
 
-  getState(): CanvasStateManager {
-    return this.state;
+  private register(semanticId: string, tldrawId: TLShapeId): void {
+    this.shapes.set(semanticId, { tldrawId });
   }
 
-  private _subscribeToUserInteraction() {
-    const update = () => {
-      this._lastUserInteraction = Date.now();
-    };
-    const el = this.editor.getContainer();
-    el.addEventListener("pointerdown", update, { passive: true });
-    el.addEventListener("wheel", update, { passive: true });
+  private getBounds(
+    id: string,
+  ): { x: number; y: number; w: number; h: number } | null {
+    const rec = this.shapes.get(id);
+    if (!rec) return null;
+    const b = this.editor.getShapePageBounds(rec.tldrawId);
+    if (!b) return null;
+    return { x: b.x, y: b.y, w: b.w, h: b.h };
+  }
+
+  /** Y coordinate just below all existing canvas content. */
+  private getNextY(): number {
+    const bounds = this.editor.getCurrentPageBounds();
+    if (!bounds) return 80;
+    return Math.ceil(bounds.maxY) + V_GAP;
+  }
+
+  /**
+   * Compute position relative to a reference shape.
+   * Returns null if the reference shape is not found.
+   */
+  private resolveRelative(
+    rel: Rel,
+    refId: string,
+    w: number,
+    h: number,
+  ): { x: number; y: number } | null {
+    const ref = this.getBounds(refId);
+    if (!ref) return null;
+
+    switch (rel) {
+      case "right-of":
+        return {
+          x: Math.round(ref.x + ref.w + H_GAP),
+          y: Math.round(ref.y + (ref.h - h) / 2),
+        };
+      case "left-of":
+        return {
+          x: Math.round(ref.x - H_GAP - w),
+          y: Math.round(ref.y + (ref.h - h) / 2),
+        };
+      case "below":
+        return {
+          x: Math.round(ref.x + (ref.w - w) / 2),
+          y: Math.round(ref.y + ref.h + V_GAP),
+        };
+      case "above":
+        return {
+          x: Math.round(ref.x + (ref.w - w) / 2),
+          y: Math.round(ref.y - V_GAP - h),
+        };
+    }
+  }
+
+  /**
+   * Compute edge-to-edge arrow coordinates between two registered shapes.
+   * Returns null if either shape is not found.
+   */
+  private resolveEdge(
+    fromId: string,
+    toId: string,
+  ): { x1: number; y1: number; x2: number; y2: number } | null {
+    const from = this.getBounds(fromId);
+    const to = this.getBounds(toId);
+    if (!from || !to) return null;
+
+    const fromCX = from.x + from.w / 2;
+    const fromCY = from.y + from.h / 2;
+    const toCX = to.x + to.w / 2;
+    const toCY = to.y + to.h / 2;
+
+    const dx = toCX - fromCX;
+    const dy = toCY - fromCY;
+
+    let x1: number, y1: number, x2: number, y2: number;
+
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      // Horizontal connection
+      if (dx >= 0) {
+        x1 = Math.round(from.x + from.w);
+        y1 = Math.round(fromCY);
+        x2 = Math.round(to.x);
+        y2 = Math.round(toCY);
+      } else {
+        x1 = Math.round(from.x);
+        y1 = Math.round(fromCY);
+        x2 = Math.round(to.x + to.w);
+        y2 = Math.round(toCY);
+      }
+    } else {
+      // Vertical connection
+      if (dy >= 0) {
+        x1 = Math.round(fromCX);
+        y1 = Math.round(from.y + from.h);
+        x2 = Math.round(toCX);
+        y2 = Math.round(to.y);
+      } else {
+        x1 = Math.round(fromCX);
+        y1 = Math.round(from.y);
+        x2 = Math.round(toCX);
+        y2 = Math.round(to.y + to.h);
+      }
+    }
+
+    return { x1, y1, x2, y2 };
   }
 
   // ── Command dispatch ──────────────────────────────────────────────────────
@@ -101,192 +194,180 @@ export class DrawingEngine {
       case "clear":
         this.clear();
         break;
-      case "title":
-        await this.drawTitle(cmd, animationBudgetMs);
+      case "heading":
+        await this.drawHeading(cmd, animationBudgetMs);
         break;
-      case "text":
-        await this.drawText(cmd, animationBudgetMs);
-        break;
-      case "rect":
-        this.drawRect(cmd);
+      case "box":
+        this.drawBox(cmd);
         break;
       case "circle":
         this.drawCircle(cmd);
         break;
-      case "arrow":
-        this.drawArrow(cmd);
+      case "diamond":
+        this.drawDiamond(cmd);
         break;
-      case "line":
-        this.drawLine(cmd);
+      case "text":
+        await this.drawText(cmd, animationBudgetMs);
         break;
-      case "bullet":
-        await this.drawBullet(cmd, animationBudgetMs);
+      case "connect":
+        this.drawConnect(cmd);
         break;
       case "highlight":
-        this.drawHighlight(cmd);
-        break;
-      case "underline":
-        await this.drawUnderline(cmd);
-        break;
-      case "circle-em":
-        await this.drawCircleEm(cmd);
-        break;
-      case "sketch-arrow":
-        this.drawSketchArrow(cmd);
-        break;
-      // ── Semantic layout commands ──────────────────────────────────────
-      case "section":
-        await this.drawSection(cmd);
-        break;
-      case "node":
-        this.drawNode(cmd);
-        break;
-      case "edge":
-        this.drawEdge(cmd);
-        break;
-      case "note":
-        await this.drawNote(cmd, animationBudgetMs);
+        await this.drawHighlight(cmd);
         break;
     }
   }
 
-  // ── Camera helpers ────────────────────────────────────────────────────────
+  // ── Canvas operations ─────────────────────────────────────────────────────
 
-  clear() {
+  clear(): void {
     const ids = [...this.editor.getCurrentPageShapeIds()];
     if (ids.length > 0) this.editor.deleteShapes(ids);
-    // Reset state manager when canvas is cleared
-    this.state = new CanvasStateManager(this.editor);
+    this.shapes.clear();
+    this._autoN = 0;
   }
 
-  /** @deprecated Use state.getNextSectionY() */
-  getNextSectionY(): number {
-    return this.state.getNextSectionY();
-  }
+  // ── Shape drawing ─────────────────────────────────────────────────────────
 
-  getViewportBounds(): { x: number; y: number; w: number; h: number } {
-    const vp = this.editor.getViewportPageBounds();
-    return {
-      x: Math.round(vp.x),
-      y: Math.round(vp.y),
-      w: Math.round(vp.w),
-      h: Math.round(vp.h),
-    };
-  }
-
-  scrollToSection(y: number): void {
-    const vp = this.editor.getViewportPageBounds();
-    this.editor.centerOnPoint(
-      { x: vp.x + vp.w / 2, y: y + vp.h * 0.35 },
-      { animation: { duration: 400 } },
-    );
-  }
-
-  /**
-   * Pan camera to show the latest drawn shape (if not recently user-controlled).
-   * Uses real bounds from CanvasStateManager after shape registration.
-   */
-  panToLatestShape(): void {
-    if (Date.now() - this._lastUserInteraction < 2000) return;
-
-    const latestId = this.state.getLatestShapeId();
-    if (!latestId) return;
-
-    const bounds = this.state.getBounds(latestId);
-    if (!bounds) return;
-
-    const vp = this.editor.getViewportPageBounds();
-    const MARGIN = 80;
-
-    // Check if shape is already fully visible
-    const fullyVisible =
-      bounds.x >= vp.x + MARGIN &&
-      bounds.x + bounds.w <= vp.x + vp.w - MARGIN &&
-      bounds.y >= vp.y + MARGIN &&
-      bounds.y + bounds.h <= vp.y + vp.h - MARGIN;
-
-    if (fullyVisible) return;
-
-    // Center on the shape's center point, biased toward top of viewport
-    const centerX = bounds.x + bounds.w / 2;
-    const centerY = bounds.y + bounds.h / 2;
-
-    this.editor.centerOnPoint(
-      { x: centerX, y: centerY - vp.h * 0.1 },
-      { animation: { duration: 350 } },
-    );
-  }
-
-  // ── Typewriter animation ──────────────────────────────────────────────────
-
-  /**
-   * Typewriter animation with optional duration budget from audio sync.
-   * When budgetMs is provided, the animation stretches to fill the time:
-   *   30% pre-delay (teacher speaks first) → 50% typewriter → 20% hold.
-   * Without a budget, uses the default 22ms/char.
-   */
-  private async animateRichText(
-    id: TLShapeId,
-    fullText: string,
-    budgetMs?: number,
-  ) {
-    let charDelay = 22;
-    let preDelay = 0;
-
-    if (budgetMs && budgetMs > 200 && fullText.length > 0) {
-      preDelay = Math.round(budgetMs * 0.3);
-      const typewriterBudget = budgetMs * 0.5;
-      // Clamp between 15ms (fast) and 80ms (slow, dramatic) per char
-      charDelay = Math.max(
-        15,
-        Math.min(80, Math.round(typewriterBudget / fullText.length)),
-      );
-    }
-
-    if (preDelay > 0) await sleep(preDelay);
-
-    let current = "";
-    for (const char of fullText) {
-      current += char;
-      this.editor.updateShapes([
-        { id, type: "text", props: { richText: toRichText(current) } },
-      ]);
-      await sleep(charDelay);
-    }
-  }
-
-  // ── Legacy coordinate-based draw methods (collision-guarded) ─────────────
-
-  private async drawTitle(cmd: TitleCommand, budgetMs?: number) {
-    const est = { x: cmd.x, y: cmd.y, w: 400, h: 70 };
-    const pos = this.state.findFreeRect(est, 16);
+  private async drawHeading(cmd: HeadingCommand, budgetMs?: number) {
     const id = createShapeId();
-    const sid = cmd.id ?? this.state.nextAutoId();
+    const sid = cmd.id ?? this.nextAutoId();
     this.editor.createShapes([
       {
         id,
         type: "text",
-        x: pos.x,
-        y: pos.y,
+        x: PAD,
+        y: this.getNextY(),
         props: {
           richText: toRichText(""),
           size: "xl" as DrawSize,
           color: toTlColor(cmd.color),
           font: "draw",
-          textAlign: "middle",
+          textAlign: "start",
           autoSize: true,
         },
       },
     ]);
-    this.state.register(sid, id, "", { label: cmd.text, shape: "title" });
-    await this.animateRichText(id, cmd.text, budgetMs);
+    this.register(sid, id);
+    await this.animateText(id, cmd.text, budgetMs);
+  }
+
+  private drawBox(cmd: BoxCommand): void {
+    const { w, h } = SIZES.box;
+    const pos =
+      cmd.rel && cmd.ref
+        ? (this.resolveRelative(cmd.rel, cmd.ref, w, h) ?? {
+            x: PAD,
+            y: this.getNextY(),
+          })
+        : { x: PAD, y: this.getNextY() };
+
+    const id = createShapeId();
+    this.editor.createShapes([
+      {
+        id,
+        type: "geo",
+        x: pos.x,
+        y: pos.y,
+        props: {
+          geo: "rectangle",
+          w,
+          h,
+          richText: toRichText(cmd.label),
+          color: toTlColor(cmd.color),
+          fill: "semi",
+          dash: "solid",
+          size: "l",
+          font: "draw",
+          align: "middle",
+          verticalAlign: "middle",
+        },
+      },
+    ]);
+    this.register(cmd.id, id);
+  }
+
+  private drawCircle(cmd: CircleCommand): void {
+    const { w, h } = SIZES.circle;
+    const pos =
+      cmd.rel && cmd.ref
+        ? (this.resolveRelative(cmd.rel, cmd.ref, w, h) ?? {
+            x: PAD,
+            y: this.getNextY(),
+          })
+        : { x: PAD, y: this.getNextY() };
+
+    const id = createShapeId();
+    this.editor.createShapes([
+      {
+        id,
+        type: "geo",
+        x: pos.x,
+        y: pos.y,
+        props: {
+          geo: "ellipse",
+          w,
+          h,
+          richText: toRichText(cmd.label),
+          color: toTlColor(cmd.color),
+          fill: "semi",
+          dash: "solid",
+          size: "l",
+          font: "draw",
+          align: "middle",
+          verticalAlign: "middle",
+        },
+      },
+    ]);
+    this.register(cmd.id, id);
+  }
+
+  private drawDiamond(cmd: DiamondCommand): void {
+    const { w, h } = SIZES.diamond;
+    const pos =
+      cmd.rel && cmd.ref
+        ? (this.resolveRelative(cmd.rel, cmd.ref, w, h) ?? {
+            x: PAD,
+            y: this.getNextY(),
+          })
+        : { x: PAD, y: this.getNextY() };
+
+    const id = createShapeId();
+    this.editor.createShapes([
+      {
+        id,
+        type: "geo",
+        x: pos.x,
+        y: pos.y,
+        props: {
+          geo: "diamond",
+          w,
+          h,
+          richText: toRichText(cmd.label),
+          color: toTlColor(cmd.color),
+          fill: "semi",
+          dash: "solid",
+          size: "l",
+          font: "draw",
+          align: "middle",
+          verticalAlign: "middle",
+        },
+      },
+    ]);
+    this.register(cmd.id, id);
   }
 
   private async drawText(cmd: TextCommand, budgetMs?: number) {
-    const est = { x: cmd.x, y: cmd.y, w: 350, h: 40 };
-    const pos = this.state.findFreeRect(est, 12);
+    const pos =
+      cmd.rel && cmd.ref
+        ? (this.resolveRelative(cmd.rel, cmd.ref, 350, 36) ?? {
+            x: PAD,
+            y: this.getNextY(),
+          })
+        : { x: PAD, y: this.getNextY() };
+
     const id = createShapeId();
-    const sid = cmd.id ?? this.state.nextAutoId();
+    const sid = cmd.id ?? this.nextAutoId();
     this.editor.createShapes([
       {
         id,
@@ -303,205 +384,58 @@ export class DrawingEngine {
         },
       },
     ]);
-    this.state.register(sid, id, "", { label: cmd.text, shape: "text" });
-    await this.animateRichText(id, cmd.text, budgetMs);
+    this.register(sid, id);
+    await this.animateText(id, cmd.text, budgetMs);
   }
 
-  private drawRect(cmd: RectCommand) {
-    const est = { x: cmd.x, y: cmd.y, w: cmd.w, h: cmd.h };
-    const pos = this.state.findFreeRect(est);
-    const id = createShapeId();
-    const sid = cmd.id ?? this.state.nextAutoId();
-    this.editor.createShapes([
-      {
-        id,
-        type: "geo",
-        x: pos.x,
-        y: pos.y,
-        props: {
-          geo: "rectangle",
-          w: cmd.w,
-          h: cmd.h,
-          richText: toRichText(cmd.label ?? ""),
-          color: toTlColor(cmd.color),
-          fill: "semi",
-          size: "l",
-          font: "draw",
-          align: "middle",
-          verticalAlign: "middle",
-        },
-      },
-    ]);
-    this.state.register(sid, id, "", {
-      label: cmd.label,
-      color: cmd.color,
-      shape: "rect",
-    });
-  }
+  private drawConnect(cmd: ConnectCommand): void {
+    const coords = this.resolveEdge(cmd.from, cmd.to);
+    if (!coords) {
+      console.warn(
+        `[DrawingEngine] connect: shape "${cmd.from}" or "${cmd.to}" not found — emit connect AFTER both shapes`,
+      );
+      return;
+    }
 
-  private drawCircle(cmd: CircleCommand) {
-    const d = cmd.r * 2;
-    const est = { x: cmd.x - cmd.r, y: cmd.y - cmd.r, w: d, h: d };
-    const pos = this.state.findFreeRect(est);
-    const id = createShapeId();
-    const sid = cmd.id ?? this.state.nextAutoId();
-    this.editor.createShapes([
-      {
-        id,
-        type: "geo",
-        x: pos.x,
-        y: pos.y,
-        props: {
-          geo: "ellipse",
-          w: d,
-          h: d,
-          richText: toRichText(cmd.label ?? ""),
-          color: toTlColor(cmd.color),
-          fill: "semi",
-          size: "l",
-          font: "draw",
-          align: "middle",
-          verticalAlign: "middle",
-        },
-      },
-    ]);
-    this.state.register(sid, id, "", {
-      label: cmd.label,
-      color: cmd.color,
-      shape: "circle",
-    });
-  }
-
-  private drawArrow(cmd: ArrowCommand) {
-    // Arrows are not collision-checked — they intentionally span between shapes.
-    const dx = cmd.x2 - cmd.x1;
-    const dy = cmd.y2 - cmd.y1;
+    const { x1, y1, x2, y2 } = coords;
     this.editor.createShapes([
       {
         id: createShapeId(),
         type: "arrow",
-        x: cmd.x1,
-        y: cmd.y1,
+        x: x1,
+        y: y1,
         props: {
           start: { x: 0, y: 0 },
-          end: { x: dx, y: dy },
+          end: { x: x2 - x1, y: y2 - y1 },
           richText: toRichText(cmd.label ?? ""),
           color: toTlColor(cmd.color),
-          size: "l",
+          dash: cmd.style === "dashed" ? "dashed" : "solid",
+          size: "m",
+          font: "draw",
           arrowheadEnd: "arrow",
           arrowheadStart: "none",
-          font: "draw",
         },
       },
     ]);
   }
 
-  private drawLine(cmd: LineCommand) {
-    const dx = cmd.x2 - cmd.x1;
-    const dy = cmd.y2 - cmd.y1;
-    this.editor.createShapes([
-      {
-        id: createShapeId(),
-        type: "arrow",
-        x: cmd.x1,
-        y: cmd.y1,
-        props: {
-          start: { x: 0, y: 0 },
-          end: { x: dx, y: dy },
-          color: toTlColor(cmd.color),
-          size: "m",
-          arrowheadEnd: "none",
-          arrowheadStart: "none",
-        },
-      },
-    ]);
-  }
-
-  private async drawBullet(cmd: BulletCommand, budgetMs?: number) {
-    const y = cmd.y + cmd.index * 40;
-    const est = { x: cmd.x, y, w: 400, h: 40 };
-    const pos = this.state.findFreeRect(est, 8);
-    const id = createShapeId();
-    const sid = cmd.id ?? this.state.nextAutoId();
-    this.editor.createShapes([
-      {
-        id,
-        type: "text",
-        x: pos.x,
-        y: pos.y,
-        props: {
-          richText: toRichText(""),
-          size: "m" as DrawSize,
-          color: "black" as DrawColor,
-          font: "draw",
-          textAlign: "start",
-          autoSize: true,
-        },
-      },
-    ]);
-    this.state.register(sid, id, "", { label: cmd.text, shape: "text" });
-    await this.animateRichText(id, `• ${cmd.text}`, budgetMs);
-  }
-
-  private drawHighlight(cmd: HighlightCommand) {
-    // Highlights overlay existing shapes — skip collision check.
-    this.editor.createShapes([
-      {
-        id: createShapeId(),
-        type: "geo",
-        x: cmd.x,
-        y: cmd.y,
-        opacity: 0.35,
-        props: {
-          geo: "rectangle",
-          w: cmd.w,
-          h: cmd.h,
-          color: toTlColor(cmd.color ?? "yellow"),
-          fill: "semi",
-          size: "m",
-        },
-      },
-    ]);
-  }
-
-  private async drawUnderline(cmd: UnderlineCommand) {
-    const id = createShapeId();
-    const dx = cmd.x2 - cmd.x1;
-    const dy = cmd.y2 - cmd.y1;
-    const STEPS = 25;
-    this.editor.createShapes([
-      {
-        id,
-        type: "arrow",
-        x: cmd.x1,
-        y: cmd.y1,
-        props: {
-          start: { x: 0, y: 0 },
-          end: { x: 0, y: 0 },
-          color: toTlColor(cmd.color),
-          size: "l",
-          dash: "draw",
-          arrowheadEnd: "none",
-          arrowheadStart: "none",
-        },
-      },
-    ]);
-    for (let i = 1; i <= STEPS; i++) {
-      const t = i / STEPS;
-      this.editor.updateShapes([
-        { id, type: "arrow", props: { end: { x: dx * t, y: dy * t } } },
-      ]);
-      await sleep(16);
+  private async drawHighlight(cmd: HighlightCommand) {
+    const bounds = this.getBounds(cmd.target);
+    if (!bounds) {
+      console.warn(
+        `[DrawingEngine] highlight: shape "${cmd.target}" not found`,
+      );
+      return;
     }
-  }
 
-  private async drawCircleEm(cmd: CircleEmCommand) {
-    const id = createShapeId();
-    const cx = cmd.x + cmd.w / 2;
-    const cy = cmd.y + cmd.h / 2;
-    const targetW = cmd.w + 24;
-    const targetH = cmd.h + 24;
+    const PAD_EM = 16;
+    const cx = bounds.x + bounds.w / 2;
+    const cy = bounds.y + bounds.h / 2;
+    const targetW = bounds.w + PAD_EM * 2;
+    const targetH = bounds.h + PAD_EM * 2;
     const STEPS = 20;
+
+    const id = createShapeId();
     this.editor.createShapes([
       {
         id,
@@ -512,17 +446,18 @@ export class DrawingEngine {
           geo: "ellipse",
           w: 2,
           h: 2,
-          color: toTlColor(cmd.color),
+          color: toTlColor(cmd.color ?? "orange"),
           fill: "none",
           dash: "draw",
           size: "l",
         },
       },
     ]);
+
     for (let i = 1; i <= STEPS; i++) {
       const t = i / STEPS;
-      const w = targetW * t,
-        h = targetH * t;
+      const w = targetW * t;
+      const h = targetH * t;
       this.editor.updateShapes([
         { id, type: "geo", x: cx - w / 2, y: cy - h / 2, props: { w, h } },
       ]);
@@ -530,272 +465,38 @@ export class DrawingEngine {
     }
   }
 
-  private drawSketchArrow(cmd: SketchArrowCommand) {
-    const dx = cmd.x2 - cmd.x1;
-    const dy = cmd.y2 - cmd.y1;
-    this.editor.createShapes([
-      {
-        id: createShapeId(),
-        type: "arrow",
-        x: cmd.x1,
-        y: cmd.y1,
-        props: {
-          start: { x: 0, y: 0 },
-          end: { x: dx, y: dy },
-          richText: toRichText(cmd.label ?? ""),
-          color: toTlColor(cmd.color),
-          size: "l",
-          dash: "draw",
-          arrowheadEnd: "arrow",
-          arrowheadStart: "none",
-          font: "draw",
-        },
-      },
-    ]);
-  }
+  // ── Text typewriter animation ─────────────────────────────────────────────
 
-  // ── Semantic layout commands ───────────────────────────────────────────────
+  /**
+   * Typewriter animation. When budgetMs is provided, the animation stretches
+   * to fill the time: 30% pre-delay → 50% typewriter → 20% hold.
+   */
+  private async animateText(
+    id: TLShapeId,
+    text: string,
+    budgetMs?: number,
+  ): Promise<void> {
+    let charDelay = 22;
+    let preDelay = 0;
 
-  private async drawSection(cmd: SectionCommand) {
-    const totalNodes = cmd.plan ? cmd.plan.length : (cmd.nodes ?? 6);
-    const sec = this.state.startSection(
-      cmd.id,
-      cmd.layout,
-      cmd.title,
-      totalNodes,
-      cmd.plan,
-    );
-
-    // Draw a grey divider line above the section (skip for the very first section)
-    if (sec.yStart > 100) {
-      const dividerY = sec.yStart - 45;
-      const xMax = CANVAS_W - 60;
-      const dividerId = createShapeId();
-      this.editor.createShapes([
-        {
-          id: dividerId,
-          type: "arrow",
-          x: 60,
-          y: dividerY,
-          props: {
-            start: { x: 0, y: 0 },
-            end: { x: xMax - 60, y: 0 },
-            color: "grey" as never,
-            size: "m",
-            arrowheadEnd: "none",
-            arrowheadStart: "none",
-          },
-        },
-      ]);
-      // Register divider as section chrome so it won't block node placement
-      this.state.addSectionChrome(dividerId);
-    }
-
-    // Draw the section title (use fixed canvas width for centering)
-    const titleX = Math.round(CANVAS_W / 2 - 200);
-    const titleId = createShapeId();
-    const titleSid = `${cmd.id}__title`;
-    this.editor.createShapes([
-      {
-        id: titleId,
-        type: "text",
-        x: titleX,
-        y: sec.yStart,
-        props: {
-          richText: toRichText(""),
-          size: "xl" as DrawSize,
-          color: "black" as DrawColor,
-          font: "draw",
-          textAlign: "middle",
-          autoSize: true,
-        },
-      },
-    ]);
-    // Register title as section chrome so it won't block node placement
-    this.state.addSectionChrome(titleId);
-    this.state.register(titleSid, titleId, "", {
-      label: cmd.title,
-      shape: "title",
-    });
-    await this.animateRichText(titleId, cmd.title);
-  }
-
-  private drawNode(cmd: NodeCommand) {
-    // Compute position — uses pre-computed slot when section was declared with a plan
-    const slot = this.state.computeNodeBounds(cmd.section, cmd.shape, cmd.id);
-
-    // Only use collision guard for the live-computation fallback path.
-    // Pre-computed slots are already perfectly placed — don't nudge them.
-    const sec = this.state.getSection(cmd.section);
-    const isPreComputed = !!sec?.pendingSlots.has(cmd.id);
-    const safe = isPreComputed
-      ? slot
-      : this.state.findFreeRect(slot, 24, /* excludeSectionChrome */ true);
-
-    const id = createShapeId();
-
-    switch (cmd.shape) {
-      case "circle": {
-        const r = Math.round(Math.min(safe.w, safe.h) / 2);
-        this.editor.createShapes([
-          {
-            id,
-            type: "geo",
-            x: safe.x + safe.w / 2 - r,
-            y: safe.y + safe.h / 2 - r,
-            props: {
-              geo: "ellipse",
-              w: r * 2,
-              h: r * 2,
-              richText: toRichText(cmd.label),
-              color: toTlColor(cmd.color),
-              fill: "semi",
-              size: "l",
-              font: "draw",
-              align: "middle",
-              verticalAlign: "middle",
-            },
-          },
-        ]);
-        break;
-      }
-      case "diamond": {
-        this.editor.createShapes([
-          {
-            id,
-            type: "geo",
-            x: safe.x,
-            y: safe.y,
-            props: {
-              geo: "diamond",
-              w: safe.w,
-              h: safe.h,
-              richText: toRichText(cmd.label),
-              color: toTlColor(cmd.color),
-              fill: "semi",
-              size: "l",
-              font: "draw",
-              align: "middle",
-              verticalAlign: "middle",
-            },
-          },
-        ]);
-        break;
-      }
-      case "text": {
-        this.editor.createShapes([
-          {
-            id,
-            type: "text",
-            x: safe.x,
-            y: safe.y,
-            props: {
-              richText: toRichText(cmd.label),
-              size: "m" as DrawSize,
-              color: toTlColor(cmd.color),
-              font: "draw",
-              textAlign: "start",
-              autoSize: true,
-            },
-          },
-        ]);
-        break;
-      }
-      default: {
-        // rect (default)
-        this.editor.createShapes([
-          {
-            id,
-            type: "geo",
-            x: safe.x,
-            y: safe.y,
-            props: {
-              geo: "rectangle",
-              w: safe.w,
-              h: safe.h,
-              richText: toRichText(cmd.label),
-              color: toTlColor(cmd.color),
-              fill: "semi",
-              size: "l",
-              font: "draw",
-              align: "middle",
-              verticalAlign: "middle",
-            },
-          },
-        ]);
-      }
-    }
-
-    this.state.register(cmd.id, id, cmd.section, {
-      label: cmd.label,
-      color: cmd.color,
-      shape: cmd.shape,
-    });
-
-    // Increment section node count after registration
-    if (sec) sec.nodeCount = sec.nodeIds.length;
-  }
-
-  private drawEdge(cmd: EdgeCommand) {
-    // Resolve real edge-to-edge coordinates from actual shape bounds
-    const coords = this.state.resolveEdge(cmd.from, cmd.to);
-    if (!coords) {
-      console.warn(
-        `[DrawingEngine] edge: shape "${cmd.from}" or "${cmd.to}" not found yet`,
+    if (budgetMs && budgetMs > 200 && text.length > 0) {
+      preDelay = Math.round(budgetMs * 0.3);
+      const typewriterBudget = budgetMs * 0.5;
+      charDelay = Math.max(
+        15,
+        Math.min(80, Math.round(typewriterBudget / text.length)),
       );
-      return;
     }
 
-    const { x1, y1, x2, y2 } = coords;
-    const dx = x2 - x1;
-    const dy = y2 - y1;
+    if (preDelay > 0) await sleep(preDelay);
 
-    this.editor.createShapes([
-      {
-        id: createShapeId(),
-        type: "arrow",
-        x: x1,
-        y: y1,
-        props: {
-          start: { x: 0, y: 0 },
-          end: { x: dx, y: dy },
-          richText: toRichText(cmd.label ?? ""),
-          color: toTlColor(cmd.color),
-          size: "l",
-          arrowheadEnd: "arrow",
-          arrowheadStart: "none",
-          font: "draw",
-        },
-      },
-    ]);
-  }
-
-  private async drawNote(cmd: NoteCommand, budgetMs?: number) {
-    const pos = this.state.resolveNote(cmd.anchor, cmd.pos);
-    if (!pos) {
-      console.warn(`[DrawingEngine] note: anchor "${cmd.anchor}" not found`);
-      return;
+    let current = "";
+    for (const char of text) {
+      current += char;
+      this.editor.updateShapes([
+        { id, type: "text", props: { richText: toRichText(current) } },
+      ]);
+      await sleep(charDelay);
     }
-
-    const id = createShapeId();
-    const sid = this.state.nextAutoId();
-    this.editor.createShapes([
-      {
-        id,
-        type: "text",
-        x: pos.x,
-        y: pos.y,
-        props: {
-          richText: toRichText(""),
-          size: (cmd.size ?? "m") as DrawSize,
-          color: toTlColor(cmd.color ?? "grey"),
-          font: "draw",
-          textAlign: "start",
-          autoSize: true,
-        },
-      },
-    ]);
-    this.state.register(sid, id, "", { label: cmd.text, shape: "text" });
-    await this.animateRichText(id, cmd.text, budgetMs);
   }
 }

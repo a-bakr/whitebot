@@ -87,26 +87,16 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
                   const n = seg.draws.length;
                   if (n === 0) return;
                   // Spread draws evenly so last draw lands ~500ms before speech ends.
-                  // gap = time between successive draws; min 250ms so each is visible.
                   const gap =
                     n > 1 ? Math.max(250, (durationMs - 500) / (n - 1)) : 0;
-                  // Per-command animation budget: how long each draw can animate
                   const perCmdBudget =
                     n > 0 && durationMs > 0
                       ? Math.round((durationMs * 0.85) / n)
                       : undefined;
                   for (let i = 0; i < n; i++) {
-                    const cmd = seg.draws[i];
                     await engine
-                      .executeCommand(cmd, perCmdBudget)
+                      .executeCommand(seg.draws[i], perCmdBudget)
                       .catch(console.error);
-                    if (
-                      cmd.cmd === "node" ||
-                      cmd.cmd === "note" ||
-                      cmd.cmd === "section"
-                    ) {
-                      engine.panToLatestShape();
-                    }
                     if (i < n - 1) {
                       await new Promise((r) => setTimeout(r, gap));
                     }
@@ -126,17 +116,9 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
               const perCmdBudget =
                 n > 0 ? Math.round((estimatedMs * 0.85) / n) : undefined;
               for (let i = 0; i < n; i++) {
-                const cmd = seg.draws[i];
                 await engine
-                  .executeCommand(cmd, perCmdBudget)
+                  .executeCommand(seg.draws[i], perCmdBudget)
                   .catch(console.error);
-                if (
-                  cmd.cmd === "node" ||
-                  cmd.cmd === "note" ||
-                  cmd.cmd === "section"
-                ) {
-                  engine.panToLatestShape();
-                }
                 if (i < n - 1) {
                   await new Promise((r) => setTimeout(r, gap));
                 }
@@ -149,26 +131,14 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
       }
 
       try {
-        // Capture canvas snapshot before fetch so AI knows where to draw
-        const engine = getEngine();
-        const canvasSnapshot =
-          engine?.getState().toSnapshot() ??
-          "CANVAS: empty\nnext_section_y: 55";
-
-        // Scroll to the upcoming section Y
-        const nextY = engine?.getState().getNextSectionY() ?? 55;
-
         const res = await fetch("/api/tutor", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ messages: nextMessages, canvasSnapshot }),
+          body: JSON.stringify({ messages: nextMessages }),
           signal: controller.signal,
         });
 
         if (!res.ok || !res.body) throw new Error(`API error ${res.status}`);
-
-        // Scroll camera to the upcoming draw region
-        engine?.scrollToSection(nextY);
 
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
@@ -230,7 +200,7 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
               if (currentSegment) {
                 currentSegment.draws.push(cmd);
               } else {
-                // Pre-speech draw (e.g. clear) — execute immediately
+                // Pre-speech draw (e.g. clear, heading) — execute immediately
                 const eng = getEngine();
                 if (eng) eng.executeCommand(cmd).catch(console.error);
               }

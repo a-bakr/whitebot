@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1751825691825,
+      "tag": "0000_smart_psynapse",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1751825833445,
+      "tag": "0001_lush_gauntlet",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1751825879184,
+      "tag": "0002_safe_trish_tilby",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1751825956522,
+      "tag": "0003_lethal_gressill",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1752073855321,
+      "tag": "0004_panoramic_star_brand",
+      "breakpoints": true
+    }
+  ]
+}

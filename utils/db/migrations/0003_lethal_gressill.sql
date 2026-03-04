@@ -1,0 +1,2 @@
+ALTER TABLE "users_table" ADD COLUMN "api_user_id" text;--> statement-breakpoint
+ALTER TABLE "users_table" ADD CONSTRAINT "users_table_api_user_id_unique" UNIQUE("api_user_id");

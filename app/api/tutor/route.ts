@@ -22,8 +22,8 @@ function textDeltaStream(result: Awaited<ReturnType<typeof streamText>>): Respon
 }
 
 export async function POST(req: Request) {
-  const { messages, canvasSnapshot = 'CANVAS: empty\nnext_section_y: 55' } = await req.json()
-  const system = buildSystemPrompt(canvasSnapshot)
+  const { messages } = await req.json()
+  const system = buildSystemPrompt()
 
   try {
     const result = await streamText({
