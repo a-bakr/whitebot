@@ -96,16 +96,16 @@ export class DrawingEngine {
 
   // ── Command dispatch ──────────────────────────────────────────────────────
 
-  async executeCommand(cmd: DrawCommand) {
+  async executeCommand(cmd: DrawCommand, animationBudgetMs?: number) {
     switch (cmd.cmd) {
       case "clear":
         this.clear();
         break;
       case "title":
-        await this.drawTitle(cmd);
+        await this.drawTitle(cmd, animationBudgetMs);
         break;
       case "text":
-        await this.drawText(cmd);
+        await this.drawText(cmd, animationBudgetMs);
         break;
       case "rect":
         this.drawRect(cmd);
@@ -120,7 +120,7 @@ export class DrawingEngine {
         this.drawLine(cmd);
         break;
       case "bullet":
-        await this.drawBullet(cmd);
+        await this.drawBullet(cmd, animationBudgetMs);
         break;
       case "highlight":
         this.drawHighlight(cmd);
@@ -145,7 +145,7 @@ export class DrawingEngine {
         this.drawEdge(cmd);
         break;
       case "note":
-        await this.drawNote(cmd);
+        await this.drawNote(cmd, animationBudgetMs);
         break;
     }
   }
@@ -219,20 +219,45 @@ export class DrawingEngine {
 
   // ── Typewriter animation ──────────────────────────────────────────────────
 
-  private async animateRichText(id: TLShapeId, fullText: string) {
+  /**
+   * Typewriter animation with optional duration budget from audio sync.
+   * When budgetMs is provided, the animation stretches to fill the time:
+   *   30% pre-delay (teacher speaks first) → 50% typewriter → 20% hold.
+   * Without a budget, uses the default 22ms/char.
+   */
+  private async animateRichText(
+    id: TLShapeId,
+    fullText: string,
+    budgetMs?: number,
+  ) {
+    let charDelay = 22;
+    let preDelay = 0;
+
+    if (budgetMs && budgetMs > 200 && fullText.length > 0) {
+      preDelay = Math.round(budgetMs * 0.3);
+      const typewriterBudget = budgetMs * 0.5;
+      // Clamp between 15ms (fast) and 80ms (slow, dramatic) per char
+      charDelay = Math.max(
+        15,
+        Math.min(80, Math.round(typewriterBudget / fullText.length)),
+      );
+    }
+
+    if (preDelay > 0) await sleep(preDelay);
+
     let current = "";
     for (const char of fullText) {
       current += char;
       this.editor.updateShapes([
         { id, type: "text", props: { richText: toRichText(current) } },
       ]);
-      await sleep(22);
+      await sleep(charDelay);
     }
   }
 
   // ── Legacy coordinate-based draw methods (collision-guarded) ─────────────
 
-  private async drawTitle(cmd: TitleCommand) {
+  private async drawTitle(cmd: TitleCommand, budgetMs?: number) {
     const est = { x: cmd.x, y: cmd.y, w: 400, h: 70 };
     const pos = this.state.findFreeRect(est, 16);
     const id = createShapeId();
@@ -254,10 +279,10 @@ export class DrawingEngine {
       },
     ]);
     this.state.register(sid, id, "", { label: cmd.text, shape: "title" });
-    await this.animateRichText(id, cmd.text);
+    await this.animateRichText(id, cmd.text, budgetMs);
   }
 
-  private async drawText(cmd: TextCommand) {
+  private async drawText(cmd: TextCommand, budgetMs?: number) {
     const est = { x: cmd.x, y: cmd.y, w: 350, h: 40 };
     const pos = this.state.findFreeRect(est, 12);
     const id = createShapeId();
@@ -279,7 +304,7 @@ export class DrawingEngine {
       },
     ]);
     this.state.register(sid, id, "", { label: cmd.text, shape: "text" });
-    await this.animateRichText(id, cmd.text);
+    await this.animateRichText(id, cmd.text, budgetMs);
   }
 
   private drawRect(cmd: RectCommand) {
@@ -392,7 +417,7 @@ export class DrawingEngine {
     ]);
   }
 
-  private async drawBullet(cmd: BulletCommand) {
+  private async drawBullet(cmd: BulletCommand, budgetMs?: number) {
     const y = cmd.y + cmd.index * 40;
     const est = { x: cmd.x, y, w: 400, h: 40 };
     const pos = this.state.findFreeRect(est, 8);
@@ -415,7 +440,7 @@ export class DrawingEngine {
       },
     ]);
     this.state.register(sid, id, "", { label: cmd.text, shape: "text" });
-    await this.animateRichText(id, `• ${cmd.text}`);
+    await this.animateRichText(id, `• ${cmd.text}`, budgetMs);
   }
 
   private drawHighlight(cmd: HighlightCommand) {
@@ -745,7 +770,7 @@ export class DrawingEngine {
     ]);
   }
 
-  private async drawNote(cmd: NoteCommand) {
+  private async drawNote(cmd: NoteCommand, budgetMs?: number) {
     const pos = this.state.resolveNote(cmd.anchor, cmd.pos);
     if (!pos) {
       console.warn(`[DrawingEngine] note: anchor "${cmd.anchor}" not found`);
@@ -771,6 +796,6 @@ export class DrawingEngine {
       },
     ]);
     this.state.register(sid, id, "", { label: cmd.text, shape: "text" });
-    await this.animateRichText(id, cmd.text);
+    await this.animateRichText(id, cmd.text, budgetMs);
   }
 }

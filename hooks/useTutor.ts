@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
-import type { DrawingEngine } from "@/lib/drawing-engine";
 import type { DrawCommand, TutorCommand } from "@/lib/drawing-types";
+import { useCallback, useRef, useState } from "react";
+
+import type { DrawingEngine } from "@/lib/drawing-engine";
 import { useSpeech } from "./useSpeech";
 
 export interface Message {
@@ -87,13 +88,23 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
                   if (n === 0) return;
                   // Spread draws evenly so last draw lands ~500ms before speech ends.
                   // gap = time between successive draws; min 250ms so each is visible.
-                  const gap = n > 1
-                    ? Math.max(250, (durationMs - 500) / (n - 1))
-                    : 0;
+                  const gap =
+                    n > 1 ? Math.max(250, (durationMs - 500) / (n - 1)) : 0;
+                  // Per-command animation budget: how long each draw can animate
+                  const perCmdBudget =
+                    n > 0 && durationMs > 0
+                      ? Math.round((durationMs * 0.85) / n)
+                      : undefined;
                   for (let i = 0; i < n; i++) {
                     const cmd = seg.draws[i];
-                    await engine.executeCommand(cmd).catch(console.error);
-                    if (cmd.cmd === 'node' || cmd.cmd === 'note' || cmd.cmd === 'section') {
+                    await engine
+                      .executeCommand(cmd, perCmdBudget)
+                      .catch(console.error);
+                    if (
+                      cmd.cmd === "node" ||
+                      cmd.cmd === "note" ||
+                      cmd.cmd === "section"
+                    ) {
                       engine.panToLatestShape();
                     }
                     if (i < n - 1) {
@@ -110,11 +121,20 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
               // Estimate duration from word count (2.5 words/sec) when no TTS
               const wordCount = seg.speechText.trim().split(/\s+/).length;
               const estimatedMs = Math.max(1000, (wordCount / 2.5) * 1000);
-              const gap = n > 1 ? Math.max(250, (estimatedMs - 500) / (n - 1)) : 0;
+              const gap =
+                n > 1 ? Math.max(250, (estimatedMs - 500) / (n - 1)) : 0;
+              const perCmdBudget =
+                n > 0 ? Math.round((estimatedMs * 0.85) / n) : undefined;
               for (let i = 0; i < n; i++) {
                 const cmd = seg.draws[i];
-                await engine.executeCommand(cmd).catch(console.error);
-                if (cmd.cmd === 'node' || cmd.cmd === 'note' || cmd.cmd === 'section') {
+                await engine
+                  .executeCommand(cmd, perCmdBudget)
+                  .catch(console.error);
+                if (
+                  cmd.cmd === "node" ||
+                  cmd.cmd === "note" ||
+                  cmd.cmd === "section"
+                ) {
                   engine.panToLatestShape();
                 }
                 if (i < n - 1) {
@@ -131,8 +151,9 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
       try {
         // Capture canvas snapshot before fetch so AI knows where to draw
         const engine = getEngine();
-        const canvasSnapshot = engine?.getState().toSnapshot()
-          ?? "CANVAS: empty\nnext_section_y: 55";
+        const canvasSnapshot =
+          engine?.getState().toSnapshot() ??
+          "CANVAS: empty\nnext_section_y: 55";
 
         // Scroll to the upcoming section Y
         const nextY = engine?.getState().getNextSectionY() ?? 55;
@@ -186,7 +207,9 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
               const userWantsClear =
                 /\b(clear|erase|start\s*over|wipe|reset)\b/.test(lastUserMsg);
               if (!userWantsClear) {
-                console.warn("[useTutor] Skipping unexpected clear command from AI");
+                console.warn(
+                  "[useTutor] Skipping unexpected clear command from AI",
+                );
                 continue;
               }
             }
