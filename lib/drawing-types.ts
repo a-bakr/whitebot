@@ -204,6 +204,67 @@ export interface NoteCommand {
   size?: DrawSize
 }
 
+// ── Data visualization commands ───────────────────────────────────────────
+
+/** Bar chart with animated growing bars. labels and values must have the same length. */
+export interface BarChartCommand {
+  t: 'draw'
+  cmd: 'bar-chart'
+  id?: string
+  x: number
+  y: number
+  w: number
+  h: number
+  title?: string
+  labels: string[]
+  values: number[]
+  colors?: DrawColor[]
+  unit?: string
+}
+
+/** Line chart with progressive line drawing. */
+export interface LineChartCommand {
+  t: 'draw'
+  cmd: 'line-chart'
+  id?: string
+  x: number
+  y: number
+  w: number
+  h: number
+  title?: string
+  labels: string[]
+  values: number[]
+  color?: DrawColor
+  unit?: string
+}
+
+/** Structured data table with a header row. */
+export interface TableCommand {
+  t: 'draw'
+  cmd: 'table'
+  id?: string
+  x: number
+  y: number
+  w: number
+  headers: string[]
+  rows: string[][]
+  color?: DrawColor
+}
+
+/** Animated horizontal progress / proportion bar (value 0–100). */
+export interface ProgressCommand {
+  t: 'draw'
+  cmd: 'progress'
+  id?: string
+  x: number
+  y: number
+  w: number
+  h: number
+  value: number
+  label?: string
+  color?: DrawColor
+}
+
 export type DrawCommand =
   | ClearCommand
   | TitleCommand
@@ -221,6 +282,10 @@ export type DrawCommand =
   | NodeCommand
   | EdgeCommand
   | NoteCommand
+  | BarChartCommand
+  | LineChartCommand
+  | TableCommand
+  | ProgressCommand
 
 export interface SpeechCommand {
   t: 'speech'

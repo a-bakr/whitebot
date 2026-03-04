@@ -30,6 +30,41 @@ The engine pre-computes a perfectly centred, compact layout immediately — then
 {"t":"draw","cmd":"edge","from":"n1","to":"n2","label":"causes","color":"red"}
 {"t":"draw","cmd":"note","anchor":"n1","pos":"below","text":"annotation","color":"grey"}
 
+### Data visualization (use for quantitative, comparative, or proportional information)
+
+**Bar chart** — comparing discrete quantities (use when teaching statistics, rankings, or measurements)
+{"t":"draw","cmd":"bar-chart","x":100,"y":200,"w":600,"h":280,"title":"Speed Comparison","labels":["Walking","Cycling","Car"],"values":[5,25,120],"colors":["blue","green","orange"],"unit":"km/h"}
+
+Rules:
+• Keep labels short (1–2 words). Maximum 6 bars.
+• values[] and labels[] must have the same length.
+• Use colors[] array (one DrawColor per bar) to color-code meaning.
+• unit is appended to each value label (e.g., "%", "ms", "°C").
+
+**Line chart** — showing trends or continuous change over time
+{"t":"draw","cmd":"line-chart","x":100,"y":200,"w":600,"h":280,"title":"Temperature Over Time","labels":["Jan","Mar","Jun","Sep","Dec"],"values":[3,8,22,18,5],"color":"blue","unit":"°C"}
+
+Rules:
+• Best for 3–8 data points. Labels are X-axis tick marks.
+• color sets the line/marker color.
+
+**Table** — structured multi-attribute comparison or lookup data
+{"t":"draw","cmd":"table","x":100,"y":200,"w":700,"headers":["Feature","Python","Java"],"rows":[["Typing","Dynamic","Static"],["Speed","Medium","Fast"],["Use case","Data/AI","Enterprise"]],"color":"blue"}
+
+Rules:
+• headers[] defines column count. rows[][] must match header count per row.
+• color sets the header row color (use blue, orange, violet, etc.).
+• Maximum 4 columns, 6 rows for readability.
+• Do NOT use this for simple comparisons — use compare layout instead.
+
+**Progress bar** — showing a proportion or completion percentage
+{"t":"draw","cmd":"progress","x":100,"y":200,"w":400,"h":30,"value":75,"label":"Efficiency","color":"green"}
+
+Rules:
+• value must be 0–100 (integer percentage).
+• Stack multiple progress commands vertically (+50px y per bar) for a breakdown.
+• label appears to the right of the bar with the percentage.
+
 ### Emphasis / annotation (still supported)
 {"t":"draw","cmd":"highlight","x":50,"y":150,"w":240,"h":100,"color":"yellow"}
 {"t":"draw","cmd":"underline","x1":60,"y1":250,"x2":280,"y2":250,"color":"red"}
@@ -75,10 +110,29 @@ Pattern: section (with full plan) → speech → node → speech → node → sp
 • Edge and note commands must come AFTER the nodes they reference
 • Keep speech SHORT: 1 sentence per beat, 10–15 words max
 
+## When to use data visualization (IMPORTANT)
+Choose the right visual for the content:
+
+| Situation | Best command |
+|---|---|
+| Comparing sizes / amounts | bar-chart |
+| Trends over time | line-chart |
+| Part of a whole (%) | progress × N (stacked) |
+| Multi-attribute comparison | table |
+| Step-by-step process | section layout="flow-tb" |
+| Concept map | section layout="mindmap" |
+| A vs B | section layout="compare" |
+
+You MAY mix a semantic section (for concepts) with a data visualization in the same response.
+For example: draw a "section" with "node" commands to explain a concept, THEN a "bar-chart" to show the numbers.
+Data visualization commands (bar-chart, line-chart, table, progress) are coordinate-based — give them x/y values just below the section's nodes.
+Estimate y position: use next_section_y + 400 as the starting y for charts placed after the current section.
+
 ## Label & section limits (CRITICAL)
 • Keep node labels SHORT — maximum 3–4 words per label. Long labels overflow shapes.
 • Maximum 6 nodes per section. More than 6 makes shapes too small or crowded.
 • NEVER mix coordinate-based commands (rect, circle, text, arrow) with semantic commands (section, node, edge) in the same response. Use ONLY semantic commands.
+• Data visualization commands (bar-chart, line-chart, table, progress) are the EXCEPTION: they may appear alongside semantic section/node commands.
 
 ## Example of GOOD pacing (plan-then-teach):
 {"t":"draw","cmd":"section","id":"s1","layout":"flow-lr","title":"Newton's First Law","plan":[{"id":"rest","shape":"rect","label":"At Rest"},{"id":"force","shape":"rect","label":"Force Applied"},{"id":"motion","shape":"rect","label":"In Motion"}]}
