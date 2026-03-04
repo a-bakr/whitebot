@@ -133,28 +133,38 @@ export class DrawingEngine {
     )
   }
 
-  panToShowDrawCommands(cmds: DrawCommand[]): void {
+  /**
+   * Pan camera to show the latest drawn shape (if not recently user-controlled).
+   * Uses real bounds from CanvasStateManager after shape registration.
+   */
+  panToLatestShape(): void {
     if (Date.now() - this._lastUserInteraction < 2000) return
 
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-    for (const cmd of cmds) {
-      const b = estimateBounds(cmd)
-      if (!b) continue
-      minX = Math.min(minX, b.x);    minY = Math.min(minY, b.y)
-      maxX = Math.max(maxX, b.x + b.w); maxY = Math.max(maxY, b.y + b.h)
-    }
-    if (minX === Infinity) return
+    const latestId = this.state.getLatestShapeId()
+    if (!latestId) return
+
+    const bounds = this.state.getBounds(latestId)
+    if (!bounds) return
 
     const vp = this.editor.getViewportPageBounds()
     const MARGIN = 80
+
+    // Check if shape is already fully visible
     const fullyVisible =
-      minX >= vp.x + MARGIN && maxX <= vp.x + vp.w - MARGIN &&
-      minY >= vp.y + MARGIN && maxY <= vp.y + vp.h - MARGIN
+      bounds.x >= vp.x + MARGIN &&
+      bounds.x + bounds.w <= vp.x + vp.w - MARGIN &&
+      bounds.y >= vp.y + MARGIN &&
+      bounds.y + bounds.h <= vp.y + vp.h - MARGIN
+
     if (fullyVisible) return
 
+    // Center on the shape's center point, biased toward top of viewport
+    const centerX = bounds.x + bounds.w / 2
+    const centerY = bounds.y + bounds.h / 2
+
     this.editor.centerOnPoint(
-      { x: (minX + maxX) / 2, y: minY + vp.h * 0.15 },
-      { animation: { duration: 400 } },
+      { x: centerX, y: centerY - vp.h * 0.1 },
+      { animation: { duration: 350 } },
     )
   }
 

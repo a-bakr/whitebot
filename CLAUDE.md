@@ -129,3 +129,43 @@ Read stream chunk
 ```bash
 pnpm add tldraw ai @ai-sdk/openai @deepgram/sdk elevenlabs
 ```
+
+---
+
+## Audio-Drawing Synchronization
+
+### Problem
+Audio (TTS) plays faster than drawings appear — AI finishes speaking before visuals are fully drawn.
+
+### Approach: Speech-Duration-Based Pacing (Option 2)
+Estimate speech duration from text length and distribute draw commands evenly across that duration.
+
+```typescript
+// lib/speech-utils.ts
+export function estimateSpeechDuration(text: string): number {
+  const wordCount = text.trim().split(/\s+/).length;
+  // Deepgram Aura average: ~150 words/min = 2.5 words/sec
+  const durationMs = (wordCount / 2.5) * 1000;
+  return Math.max(durationMs, 1000); // Minimum 1 second
+}
+```
+
+```typescript
+// In useTutor.ts runSegments() — hybrid with min/max clamp
+const baseDuration = estimateSpeechDuration(seg.speechText);
+const calculatedDelay = seg.draws.length > 0 ? baseDuration / seg.draws.length : 0;
+const drawDelay = Math.max(200, Math.min(800, calculatedDelay));
+
+for (const cmd of seg.draws) {
+  await engine.executeCommand(cmd).catch(console.error);
+  await sleep(drawDelay);
+}
+```
+
+### Files
+- `lib/speech-utils.ts` (new) — `estimateSpeechDuration(text)`
+- `hooks/useTutor.ts` — apply `drawDelay` between draw commands in `runSegments()`
+
+### Tuning
+- Min delay: 200ms/command · Max delay: 800ms/command
+- Optional: `NEXT_PUBLIC_DRAWING_PACE_FACTOR=1.0` env var (0.5 = faster, 2.0 = slower)

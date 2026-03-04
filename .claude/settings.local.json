@@ -1,25 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(*)",
-      "WebFetch(*)",
-      "WebSearch",
-      "mcp__*",
-      "Bash(cat:*)",
-      "Bash(cd:*)",
-      "Bash(wsl:*)",
-      "Bash(pnpm install)",
-      "Bash(pnpm type-check:*)",
-      "Bash(npx tsc:*)",
-      "Bash(find:*)",
-      "WebFetch(domain:bertomill.medium.com)",
-      "WebFetch(domain:strapi.io)",
-      "WebFetch(domain:enhancial.substack.com)",
-      "WebFetch(domain:vercel.com)",
-      "Bash(npm run:*)",
-      "mcp__context7__resolve-library-id",
-      "mcp__context7__query-docs",
-      "WebFetch(domain:arxiv.org)"
-    ]
+      "Bash(npx tsc --noEmit)"
+    ],
+    "deny": [],
+    "ask": []
   }
 }

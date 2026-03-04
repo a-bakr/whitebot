@@ -24,6 +24,7 @@ export class CanvasStateManager {
   private shapes   = new Map<string, ShapeRecord>()
   private sections = new Map<string, SectionRecord>()
   private _autoN   = 0
+  private _lastShapeId = ''
 
   constructor(private editor: Editor) {}
 
@@ -49,11 +50,16 @@ export class CanvasStateManager {
       color: meta?.color,
       shape: meta?.shape,
     })
+    this._lastShapeId = semanticId
     const section = this.sections.get(sectionId)
     if (section && !section.nodeIds.includes(semanticId)) {
       section.nodeIds.push(semanticId)
       section.nodeCount = section.nodeIds.length
     }
+  }
+
+  getLatestShapeId(): string {
+    return this._lastShapeId
   }
 
   getShape(semanticId: string): ShapeRecord | null {
