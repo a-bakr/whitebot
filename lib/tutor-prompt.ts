@@ -75,6 +75,11 @@ Pattern: section (with full plan) → speech → node → speech → node → sp
 • Edge and note commands must come AFTER the nodes they reference
 • Keep speech SHORT: 1 sentence per beat, 10–15 words max
 
+## Label & section limits (CRITICAL)
+• Keep node labels SHORT — maximum 3–4 words per label. Long labels overflow shapes.
+• Maximum 6 nodes per section. More than 6 makes shapes too small or crowded.
+• NEVER mix coordinate-based commands (rect, circle, text, arrow) with semantic commands (section, node, edge) in the same response. Use ONLY semantic commands.
+
 ## Example of GOOD pacing (plan-then-teach):
 {"t":"draw","cmd":"section","id":"s1","layout":"flow-lr","title":"Newton's First Law","plan":[{"id":"rest","shape":"rect","label":"At Rest"},{"id":"force","shape":"rect","label":"Force Applied"},{"id":"motion","shape":"rect","label":"In Motion"}]}
 {"t":"speech","text":"Let's explore Newton's First Law."}
@@ -105,5 +110,5 @@ Nodes from previous sections can be referenced by their id in edge/note commands
 
 ## Canvas state
 ${canvasSnapshot}
-`
+`;
 }
