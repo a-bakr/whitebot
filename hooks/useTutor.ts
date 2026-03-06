@@ -89,13 +89,9 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
                   // Spread draws evenly so last draw lands ~500ms before speech ends.
                   const gap =
                     n > 1 ? Math.max(250, (durationMs - 500) / (n - 1)) : 0;
-                  const perCmdBudget =
-                    n > 0 && durationMs > 0
-                      ? Math.round((durationMs * 0.85) / n)
-                      : undefined;
                   for (let i = 0; i < n; i++) {
                     await engine
-                      .executeCommand(seg.draws[i], perCmdBudget)
+                      .executeCommand(seg.draws[i])
                       .catch(console.error);
                     if (i < n - 1) {
                       await new Promise((r) => setTimeout(r, gap));
@@ -113,11 +109,9 @@ export function useTutor(getEngine: () => DrawingEngine | null) {
               const estimatedMs = Math.max(1000, (wordCount / 2.5) * 1000);
               const gap =
                 n > 1 ? Math.max(250, (estimatedMs - 500) / (n - 1)) : 0;
-              const perCmdBudget =
-                n > 0 ? Math.round((estimatedMs * 0.85) / n) : undefined;
               for (let i = 0; i < n; i++) {
                 await engine
-                  .executeCommand(seg.draws[i], perCmdBudget)
+                  .executeCommand(seg.draws[i])
                   .catch(console.error);
                 if (i < n - 1) {
                   await new Promise((r) => setTimeout(r, gap));

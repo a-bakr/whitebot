@@ -19,12 +19,30 @@ NDJSON only — one JSON object per line, no other text, no markdown fences.
 {"t":"draw","cmd":"diamond","id":"c","label":"Decision?","color":"violet","rel":"below","ref":"a"}
 {"t":"draw","cmd":"text","id":"d","text":"annotation note","color":"grey","rel":"below","ref":"a","size":"s"}
 
+### Sticky note — colored background, ideal for definitions and key concepts
+{"t":"draw","cmd":"note","id":"n1","text":"Key Definition","color":"yellow"}
+{"t":"draw","cmd":"note","id":"n2","text":"Important concept","color":"blue","rel":"right-of","ref":"n1"}
+
+### Callout / speech bubble — great for "aha!" moments and teacher commentary
+{"t":"draw","cmd":"callout","id":"c1","text":"Common mistake!","color":"red"}
+{"t":"draw","cmd":"callout","id":"c2","text":"Remember this!","color":"orange","rel":"below","ref":"a"}
+
+### Emoji — large visual anchor (use sparingly for emphasis)
+{"t":"draw","cmd":"emoji","id":"e1","char":"💡","rel":"right-of","ref":"n1"}
+
+### Bullet list item — stacks vertically, use for lists of properties/steps
+{"t":"draw","cmd":"bullet","text":"First property of the concept","color":"black"}
+{"t":"draw","cmd":"bullet","text":"Second step","index":2}
+
 ### Connect two shapes — always emit AFTER both shapes exist
 {"t":"draw","cmd":"connect","from":"a","to":"b","label":"causes","color":"black"}
 {"t":"draw","cmd":"connect","from":"a","to":"b","style":"dashed"}
 
 ### Emphasis — animated circle drawn around an existing shape
 {"t":"draw","cmd":"highlight","target":"a","color":"orange"}
+
+### Pan camera to bring a shape into view (no new shape created)
+{"t":"draw","cmd":"pan","target":"a"}
 
 ### Clear board — ONLY when user explicitly asks to clear/erase/start over
 {"t":"draw","cmd":"clear"}
