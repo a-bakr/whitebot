@@ -41,7 +41,6 @@ export interface BoxCommand {
   id: string;
   label: string;
   color?: DrawColor;
-  /** Relational placement — where to put this relative to `ref`. Omit to auto-place below all content. */
   rel?: Rel;
   ref?: string;
 }
@@ -80,6 +79,66 @@ export interface TextCommand {
   ref?: string;
 }
 
+/**
+ * Sticky note — ideal for key definitions, terms, and concepts.
+ * Colored background makes them pop visually.
+ */
+export interface NoteCommand {
+  t: "draw";
+  cmd: "note";
+  id: string;
+  text: string;
+  /** yellow=definition, blue=concept, green=example, orange=warning, violet=theory */
+  color?: DrawColor;
+  rel?: Rel;
+  ref?: string;
+}
+
+/**
+ * Callout / speech-bubble — great for "aha!" moments, annotations,
+ * common mistakes, or teacher commentary.
+ */
+export interface CalloutCommand {
+  t: "draw";
+  cmd: "callout";
+  id: string;
+  text: string;
+  color?: DrawColor;
+  rel?: Rel;
+  ref?: string;
+}
+
+/**
+ * Large emoji — use as a visual anchor to grab attention.
+ * Examples: ⚡ for energy, 🚀 for launch, 💡 for idea, ✅ for correct, ❌ for wrong,
+ * ⚖️ for balance, 🔄 for cycle, 🎯 for goal, 🌍 for global, 🔑 for key concept.
+ */
+export interface EmojiCommand {
+  t: "draw";
+  cmd: "emoji";
+  id: string;
+  /** The emoji character(s), e.g. "💡" or "🚀" */
+  char: string;
+  rel?: Rel;
+  ref?: string;
+}
+
+/**
+ * Bullet list item — stacks items vertically with bullet prefix.
+ * Use for lists of properties, steps, or examples.
+ */
+export interface BulletCommand {
+  t: "draw";
+  cmd: "bullet";
+  id?: string;
+  text: string;
+  /** 1-based index for numbered lists. Omit for bullet point. */
+  index?: number;
+  color?: DrawColor;
+  rel?: Rel;
+  ref?: string;
+}
+
 /** Arrow connecting two shapes by their semantic IDs. Always emit AFTER both shapes exist. */
 export interface ConnectCommand {
   t: "draw";
@@ -100,6 +159,13 @@ export interface HighlightCommand {
   color?: DrawColor;
 }
 
+/** Pan the camera to bring a shape into view. Does not create a shape. */
+export interface PanCommand {
+  t: "draw";
+  cmd: "pan";
+  target: string;
+}
+
 export type DrawCommand =
   | ClearCommand
   | HeadingCommand
@@ -107,8 +173,13 @@ export type DrawCommand =
   | CircleCommand
   | DiamondCommand
   | TextCommand
+  | NoteCommand
+  | CalloutCommand
+  | EmojiCommand
+  | BulletCommand
   | ConnectCommand
-  | HighlightCommand;
+  | HighlightCommand
+  | PanCommand;
 
 // ── Non-draw commands ────────────────────────────────────────────────────────
 
