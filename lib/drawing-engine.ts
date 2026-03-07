@@ -549,7 +549,7 @@ export class DrawingEngine {
         x: cx - 2,
         y: cy - 2,
         props: {
-          geo: "callout",
+          geo: "rectangle",
           w: 4,
           h: 4,
           richText: toRichText(cmd.text),
