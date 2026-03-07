@@ -281,13 +281,8 @@ export class DrawingEngine {
       const w = Math.max(4, finalW * e);
       const h = Math.max(4, finalH * e);
       this.editor.updateShapes([
-        {
-          id,
-          type,
-          x: cx - w / 2,
-          y: cy - h / 2,
-          props: { w, h },
-        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { id, type, x: cx - w / 2, y: cy - h / 2, props: { w, h } } as any,
       ]);
       await sleep(SCALE_FRAME_MS);
     }
